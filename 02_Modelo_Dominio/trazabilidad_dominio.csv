@@ -1,0 +1,46 @@
+CodigoRequerimiento,TipoRequerimiento,NombreRequerimiento,EntidadesInvolucradas,RolEnEntidad
+RF-CAT-001,Funcional,Gestión de Catálogo de Productos y Mercadería,"Producto, Categoria",Definición del maestro de bienes y taxonomía comercial
+RF-CAT-002,Funcional,Esquema de Precios Dual (Mayorista y Minorista),"Producto, EscalaPrecio",Estructuración de escalas de precios por volumen y canal
+RF-CAT-003,Funcional,Normalización de Unidades de Medida Catálogo 03,Producto,Atributo unidadMedida validado según estándar SUNAT
+RF-CAT-004,Funcional,Control de Lotes y Vencimientos Perecibles,"Producto, Lote",Trazabilidad de caducidad para bienes de consumo perecibles
+RF-CAT-005,Funcional,Clasificación Arancelaria UNSPSC Catálogo 25,Producto,Atributo codigoSunat para clasificación fiscal UBL 2.1
+RF-ALM-001,Funcional,Gestión Multialmacén y Ubicaciones,"Almacen, StockAlmacen",Definición de locales físicos y cuantificación de existencias
+RF-ALM-002,Funcional,Registro Histórico de Movimientos Kardex,"StockAlmacen, MovimientoInventario",Asiento inmutable de variaciones físicas y valorizadas
+RF-ALM-003,Funcional,Registro de Entradas de Mercadería (Inflows),"RecepcionMercaderia, DetalleRecepcion, StockAlmacen, MovimientoInventario",Afectación positiva del saldo y recálculo de costo promedio
+RF-ALM-004,Funcional,Registro de Salidas de Mercadería (Outflows),"StockAlmacen, MovimientoInventario, Venta, DetalleVenta",Deducción física de stock con validación de no saldo negativo
+RF-ALM-005,Funcional,Transferencias de Stock Interalmacén,"Almacen, StockAlmacen, MovimientoInventario",Flujo de traslado con estados de tránsito y mermas
+RF-ALM-006,Funcional,Ajustes de Inventario y Conciliación,"StockAlmacen, MovimientoInventario, Usuario",Ajustes justificados con autorización del Jefe de Almacén
+RF-DIR-001,Funcional,Maestro de Clientes y Validación Catálogo 06,Cliente,Validación sintáctica de DNI (8 dígitos) y RUC (11 dígitos)
+RF-DIR-002,Funcional,Maestro de Proveedores y Abastecimiento,Proveedor,Gestión de proveedores con RUC oficial validado
+RF-DIR-003,Funcional,Líneas de Crédito para Clientes Mayoristas,"Cliente, Venta, CuotaCredito",Control de límites monetarios y plazos comerciales
+RF-DIR-004,Funcional,Consulta Automatizada de Padrones RUC/DNI,Cliente,Autocompletado de datos fiscales de adquirentes
+RF-VEN-001,Funcional,Punto de Venta Minorista (Retail POS),"Venta, DetalleVenta, StockAlmacen, MovimientoInventario",Transacción rápida con descuento de stock inmediato
+RF-VEN-002,Funcional,Gestión del Flujo Comercial Mayorista,"Venta, DetalleVenta, CuotaCredito, StockAlmacen, Cliente",Pedido con reserva de stock y calendario de crédito RS 193-2020
+RF-VEN-003,Funcional,Cálculo Automatizado de Tributos Peruanos,"Venta, DetalleVenta, Producto",Liquidación matemática de bases imponibles y 18% de IGV
+RF-VEN-004,Funcional,Gestión de Descuentos y Promociones,"DetalleVenta, Venta",Descuentos comerciales por volumen en líneas de venta
+RF-CPE-001,Funcional,Facturas Electrónicas (Tipo 01) UBL 2.1,"ComprobanteElectronico, DetalleComprobante, Venta, CuotaCredito",Generación de factura fiscal con cuotas a crédito
+RF-CPE-002,Funcional,Boletas de Venta Electrónicas (Tipo 03) UBL 2.1,"ComprobanteElectronico, DetalleComprobante, Venta",Generación de boleta fiscal con validación de DNI si >= S/ 700
+RF-CPE-003,Funcional,Notas de Crédito (07) y Débito (08),"ComprobanteElectronico, DetalleComprobante",Comprobante de rectificación vinculado a comprobante de referencia
+RF-CPE-004,Funcional,Firma Digital XMLDSig X.509,ComprobanteElectronico,Generación del DigestValue SHA-256 y firma criptográfica
+RF-CPE-005,Funcional,Representación Impresa PDF con Código QR,ComprobanteElectronico,Renderizado gráfico con los 10 campos normativos de SUNAT
+RF-CPE-006,Funcional,Resúmenes Diarios y Bajas UBL 2.1,ComprobanteElectronico,Notificación agrupada de boletas o anulación de documentos
+RF-CPE-007,Funcional,Guías de Remisión Electrónica Remitente (09),ComprobanteElectronico,Comprobante fiscal de traslado interalmacén o despacho
+RF-SUN-001,Funcional,Envío de Comprobantes SOAP sendBill,ComprobanteElectronico,Empaquetado ZIP y transmisión segura a servidores de SUNAT
+RF-SUN-002,Funcional,Recepción y Procesamiento del CDR,ComprobanteElectronico,Descompresión del CDR oficial y actualización del estado del CPE
+RF-SUN-003,Funcional,Consulta de Tickets getStatus,ComprobanteElectronico,Sondeo periódico de procesamiento de resúmenes diarios
+RF-SUN-004,Funcional,Manejo de Contingencias y Falla de Red,ComprobanteElectronico,Persistencia en cola de pendientes con reintentos exponenciales
+RF-SUN-005,Funcional,Desacoplamiento Asíncrono (Transactional Outbox),"ComprobanteElectronico, Venta",Emisión desacoplada de la disponibilidad en línea de SUNAT
+RF-MIG-001,Funcional,ETL de Maestros Legados,"Producto, Categoria, Cliente, Proveedor",Ingesta y normalización de catálogos desde el sistema anterior
+RF-MIG-002,Funcional,Carga y Conciliación de Saldos Iniciales,"StockAlmacen, MovimientoInventario",Asiento de apertura en Kardex con código SUNAT 16
+RF-MIG-003,Funcional,Histórico Legado en Esquema Read-Only,"MovimientoInventario, Venta",Acceso de solo lectura a transacciones de ejercicios pasados
+RF-TRZ-001,Funcional,Trazabilidad Venta-Kardex-CPE-CDR,"Venta, MovimientoInventario, ComprobanteElectronico, StockAlmacen",Navegación bidireccional entre la venta y el sustento fiscal
+RF-TRZ-002,Funcional,Validación Sintáctica y Semántica Previa,"Venta, DetalleVenta, StockAlmacen, ComprobanteElectronico",Control de invariantes previas al compromiso en base de datos
+RF-TRZ-003,Funcional,Pista Inmutable de Auditoría (Audit Log),"Usuario, MovimientoInventario, Venta",Registro de marca temporal y usuario en operaciones sensibles
+RNF-DAT-001,No Funcional,Integridad Transaccional ACID,"StockAlmacen, MovimientoInventario, Venta",Aislamiento transaccional en PostgreSQL garantizando consistencia
+RNF-AUD-001,No Funcional,Inmutabilidad de Documentos Tributarios,ComprobanteElectronico,Almacenamiento WORM de XML firmado y CDR de SUNAT
+RN-01,Regla Negocio,Inmutabilidad de CPE con CDR Aceptado,ComprobanteElectronico,Bloqueo de modificación física tras aceptación oficial de SUNAT
+RN-02,Regla Negocio,Correlatividad y Series SUNAT,ComprobanteElectronico,Secuencia ascendente estricta (Fxxx, Bxxx, FCxx, BCxx)
+RN-03,Regla Negocio,Validación Documento Adquirente,"Cliente, ComprobanteElectronico",Obligatoriedad de RUC en Facturas y DNI en Boletas >= S/ 700
+RN-04,Regla Negocio,Plazo Máximo Legal de Envío (3 días),ComprobanteElectronico,Priorización de envío antes de las 72 horas reglamentarias
+RN-05,Regla Negocio,Restricción Estricta de Kardex No Negativo,"StockAlmacen, MovimientoInventario",Prohibición absoluta de saldos físicos o disponibles < 0
+RN-06,Regla Negocio,Identificación de Afectación al IGV por Línea,"DetalleVenta, DetalleComprobante",Separación contable de operaciones Gravadas, Exoneradas e Inafectas
