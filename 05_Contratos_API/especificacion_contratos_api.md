@@ -3,7 +3,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Proyecto / Asignatura** | Examen de Arquitectura de Software |
-| **Entregable N° 3** | Especificación Formal de Endpoints y Servicios vía Contratos de API |
+| **Entregable N° 5** | Especificación Formal de Endpoints y Servicios vía Contratos de API |
 | **Dominio** | Gestión Comercial, Control de Inventarios y Facturación Electrónica UBL 2.1 |
 | **Enfoque** | Spec-First / Contract-Driven Development (OpenAPI 3.1 & JSON Schema) |
 | **Estándar de Errores** | RFC 7807 / RFC 9457 (Problem Details for HTTP APIs) |

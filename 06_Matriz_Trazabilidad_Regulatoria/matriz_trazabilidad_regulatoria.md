@@ -3,7 +3,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Proyecto / Asignatura** | Examen de Arquitectura de Software |
-| **Entregable N° 4** | Matriz de Trazabilidad Regulatoria (Requisitos $\leftrightarrow$ UBL 2.1 $\leftrightarrow$ SUNAT) |
+| **Entregable N° 6** | Matriz de Trazabilidad Regulatoria (Requisitos $\leftrightarrow$ UBL 2.1 $\leftrightarrow$ SUNAT) |
 | **Dominio** | Facturación Electrónica y Control Comercial/Inventarios de Abarrotes |
 | **Marco Tributario** | SUNAT (Perú) - Sistema de Emisión Electrónica (SEE) |
 | **Estándar Internacional** | OASIS Universal Business Language (UBL) versión 2.1 |

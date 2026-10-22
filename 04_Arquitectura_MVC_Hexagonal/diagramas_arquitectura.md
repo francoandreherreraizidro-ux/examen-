@@ -3,7 +3,7 @@
 | Metadato | Detalle |
 | :--- | :--- |
 | **Proyecto / Asignatura** | Examen de Arquitectura de Software |
-| **Entregable N° 2** | Diagramas de Arquitectura MVC con Perspectiva Hexagonal |
+| **Entregable N° 4** | Diagramas de Arquitectura MVC con Perspectiva Hexagonal |
 | **Dominio** | Gestión Comercial, Control de Inventarios y Facturación Electrónica UBL 2.1 |
 | **Patrón Arquitectónico** | Arquitectura Hexagonal (Ports & Adapters) articulada con Modelo-Vista-Controlador (MVC) |
 | **Persistencia** | PostgreSQL con Patrón Transactional Outbox |
