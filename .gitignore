@@ -1,0 +1,42 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Dependencies & Package Managers
+node_modules/
+vendor/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+out/
+target/
+*.log
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+test-results/
+
+# IDE / Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
