@@ -1,685 +1,162 @@
-# Especificación de Endpoints y Servicios mediante Contratos de API (Spec-First)
+# Contratos de API del sistema comercial
 
 | Metadato | Detalle |
-| :--- | :--- |
-| **Proyecto / Asignatura** | Examen de Arquitectura de Software |
-| **Entregable N° 5** | Especificación Formal de Endpoints y Servicios vía Contratos de API |
-| **Dominio** | Gestión Comercial, Control de Inventarios y Facturación Electrónica UBL 2.1 |
-| **Enfoque** | Spec-First / Contract-Driven Development (OpenAPI 3.1 & JSON Schema) |
-| **Estándar de Errores** | RFC 7807 / RFC 9457 (Problem Details for HTTP APIs) |
-| **Protocolo de Seguridad** | OAuth 2.0 / JWT Bearer Tokens con RBAC |
-| **Estado** | `APPROVED SPECIFICATION` (Contratos Congelados para Implementación y Tests) |
-| **Versión** | 1.0.0 |
-| **Base URL** | `https://api.empresa-abarrotes.pe/api/v1` |
-
----
-
-## Índice de Contenidos
-
-1. [Políticas Globales de la API](#1-políticas-globales-de-la-api)
-   - 1.1. Cabeceras Comunes (Headers)
-   - 1.2. Idempotencia en Operaciones Financieras y de Inventario
-   - 1.3. Estructura Estándar de Respuesta (Success Envelope)
-   - 1.4. Manejo de Errores Estándar (RFC 7807 Problem Details)
-2. [Módulo 1: Catálogo de Productos y Almacenes](#2-módulo-1-catálogo-de-productos-y-almacenes)
-   - 2.1. `POST /api/v1/catalog/products` - Creación de Producto con Precios Duales
-   - 2.2. `GET /api/v1/catalog/products` - Consulta Paginada de Catálogo
-   - 2.3. `GET /api/v1/inventory/warehouses` - Listado de Almacenes y Locales
-3. [Módulo 2: Control de Inventarios y Kardex](#3-módulo-2-control-de-inventarios-y-kardex)
-   - 3.1. `POST /api/v1/inventory/movements/inflows` - Registro de Entrada (Compra / Devolución)
-   - 3.2. `POST /api/v1/inventory/movements/transfers` - Traslado Interalmacén
-   - 3.3. `POST /api/v1/inventory/movements/adjustments` - Ajuste de Inventario Físico
-   - 3.4. `GET /api/v1/inventory/kardex` - Consulta de Kardex Permanente Valorizado
-4. [Módulo 3: Clientes, Proveedores y Líneas de Crédito](#4-módulo-3-clientes-proveedores-y-líneas-de-crédito)
-   - 4.1. `POST /api/v1/directory/customers` - Registro de Cliente (Validación Catálogo 06 SUNAT)
-   - 4.2. `GET /api/v1/directory/customers/{id}/credit-status` - Verificación de Línea de Crédito
-5. [Módulo 4: Operaciones de Venta (Retail POS y Mayorista)](#5-módulo-4-operaciones-de-venta)
-   - 5.1. `POST /api/v1/sales/pos` - Venta Rápida Minorista (Checkout en Mostrador)
-   - 5.2. `POST /api/v1/sales/wholesale/orders` - Creación de Pedido Mayorista con Reserva
-   - 5.3. `POST /api/v1/sales/wholesale/orders/{id}/confirm` - Confirmación y Aprobación Comercial
-6. [Módulo 5: Facturación Electrónica UBL 2.1 e Integración SUNAT](#6-módulo-5-facturación-electrónica-ubl-21)
-   - 6.1. `POST /api/v1/billing/invoices` - Emisión Directa de Comprobante (Factura / Boleta)
-   - 6.2. `POST /api/v1/billing/credit-notes` - Emisión de Nota de Crédito (Tipo 07)
-   - 6.3. `GET /api/v1/billing/documents/{id}/xml` - Descarga del XML UBL 2.1 Firmado
-   - 6.4. `GET /api/v1/billing/documents/{id}/cdr` - Consulta y Descarga de la Constancia CDR
-   - 6.5. `POST /api/v1/billing/outbox/process` - Disparo Manual / Worker de Lote a SUNAT
-7. [Módulo 6: Migración de Datos Legados (ETL Spec)](#7-módulo-6-migración-de-datos-legados)
-   - 7.1. `POST /api/v1/migration/jobs/stock-balances` - Carga de Saldos Iniciales de Stock
-   - 7.2. `GET /api/v1/migration/jobs/{jobId}` - Consulta de Estado y Reporte de Conciliación
-
----
-
-## 1. Políticas Globales de la API
-
-### 1.1. Cabeceras Comunes (Headers)
-
-#### Cabeceras de Solicitud (Request Headers)
-| Cabecera | Tipo | Obligatorio | Descripción |
-| :--- | :--- | :--- | :--- |
-| `Authorization` | String | Sí | Token JWT Bearer: `Bearer <token_jwt>`. |
-| `Content-Type` | String | Sí | `application/json` (o `multipart/form-data` para archivos de migración). |
-| `Accept` | String | Sí | `application/json`, `application/xml` (para UBL) o `application/pdf`. |
-| `X-Correlation-ID` | UUID | Sí | Identificador único de trazabilidad distribuida generado por el cliente. |
-| `Idempotency-Key` | String | Condicional | Obligatorio en operaciones de mutación crítica (`POST /sales/*`, `POST /billing/*`). |
-
-#### Cabeceras de Respuesta (Response Headers)
-| Cabecera | Tipo | Descripción |
-| :--- | :--- | :--- |
-| `X-Correlation-ID` | UUID | Eco del ID de trazabilidad recibido para auditoría cruzada. |
-| `X-RateLimit-Limit` | Integer | Límite máximo de peticiones por minuto. |
-| `X-RateLimit-Remaining`| Integer | Peticiones remanentes en la ventana de tiempo. |
-
----
-
-### 1.2. Idempotencia en Operaciones Críticas
-
-Para evitar dobles cobros, duplicidad de comprobantes fiscales ante la SUNAT o deducciones dobles de inventario ante reintentos de red:
-* Las rutas de creación de ventas, emisión de comprobantes y ajustes de inventario exigen la cabecera `Idempotency-Key: <UUID>`.
-* El servidor registra la clave en PostgreSQL junto con el hash del payload.
-* Si el cliente reintenta con la misma `Idempotency-Key` en un lapso de 24 horas, el servidor retorna la respuesta almacenada previamente con código HTTP `200 OK` y cabecera `X-Cache-Lookup: HIT`, sin volver a ejecutar la transacción en base de datos ni emitir comprobantes duplicados.
-
----
-
-### 1.3. Estructura Estándar de Respuesta (Success Envelope)
-
-Toda respuesta exitosa sigue una envoltura homogénea:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "metadata": {
-    "correlationId": "550e8400-e29b-41d4-a716-446655440000",
-    "timestamp": "2026-10-22T10:15:30.123Z"
-  }
-}
-```
-
----
-
-### 1.4. Manejo de Errores Estándar (RFC 7807 / RFC 9457)
-
-Los errores se retornan bajo el estándar formal `application/problem+json`:
-
-```json
-{
-  "type": "https://api.empresa-abarrotes.pe/errors/insufficient-stock",
-  "title": "Stock Insuficiente en Almacén",
-  "status": 422,
-  "detail": "El producto con SKU 'ABAR-ARROZ-COSTE-50K' en el Almacén Central cuenta con stock disponible de 12.000 unidades, pero se solicitaron 25.000 unidades.",
-  "instance": "/api/v1/sales/pos",
-  "code": "ERR_INSUFFICIENT_STOCK",
-  "invalidParams": [
-    {
-      "name": "items[0].quantity",
-      "reason": "Requested quantity exceeds available stock"
-    }
-  ],
-  "timestamp": "2026-10-22T10:15:30.125Z"
-}
-```
-
----
-
-## 2. Módulo 1: Catálogo de Productos y Almacenes
-
----
-
-### 2.1. `POST /api/v1/catalog/products` - Creación de Producto
-
-#### Descripción
-Registra un nuevo producto en el catálogo general, definiendo sus unidades de medida normalizadas conforme al Catálogo N° 03 de la SUNAT, afectación al IGV por defecto y su esquema dual de precios (minorista y mayorista).
-
-#### Permisos Requeridos (RBAC)
-* Rol: `ROLE_ADMIN`, `ROLE_CATALOG_MANAGER`.
-
-#### Request Body
-```json
-{
-  "sku": "ABAR-ARROZ-COSTE-50K",
-  "barcode": "7750123456789",
-  "name": "Arroz Costeño Extra Saco 50 Kg",
-  "description": "Arroz grano largo seleccionado de primera calidad",
-  "category": "ABARROTES",
-  "unitOfMeasure": "KGM",
-  "sunatProductCode": "50111515",
-  "taxAffectionDefault": "10",
-  "isPerishable": true,
-  "priceTiers": [
-    {
-      "tierType": "RETAIL_PRICE",
-      "minQuantity": 1.0,
-      "unitPrice": 185.00,
-      "currency": "PEN",
-      "validFrom": "2026-10-01"
-    },
-    {
-      "tierType": "WHOLESALE_TIER_1",
-      "minQuantity": 10.0,
-      "unitPrice": 172.50,
-      "currency": "PEN",
-      "validFrom": "2026-10-01"
-    }
-  ]
-}
-```
-
-#### Tabla de Esquema de Campos
-| Campo | Tipo | Obligatorio | Restricciones | Descripción |
-| :--- | :--- | :--- | :--- | :--- |
-| `sku` | String | Sí | 3 a 50 caracteres, alfanumérico único. | Identificador interno SKU. |
-| `barcode` | String | No | Formato EAN-13, EAN-8 o UPC válido. | Código de barras comercial. |
-| `name` | String | Sí | Máximo 255 caracteres. | Denominación del producto. |
-| `category` | String | Sí | Máximo 100 caracteres. | Categoría de mercadería. |
-| `unitOfMeasure` | String | Sí | Valores válidos: `NIU`, `KGM`, `BX`, `PK`. | Código según Catálogo 03 SUNAT. |
-| `sunatProductCode` | String | No | 8 dígitos numéricos. | Código UNSPSC Catálogo 25. |
-| `taxAffectionDefault` | String | Sí | Enum: `10` (Gravado), `20` (Exon), `30` (Inaf). | Afectación tributaria Catálogo 07. |
-| `isPerishable` | Boolean | Sí | Default `false`. | Exige control de lote y caducidad. |
-| `priceTiers` | Array | Sí | Mínimo 1 elemento (minorista). | Escalas de precio con IGV incluido. |
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-    "sku": "ABAR-ARROZ-COSTE-50K",
-    "name": "Arroz Costeño Extra Saco 50 Kg",
-    "isActive": true,
-    "createdAt": "2026-10-22T10:15:30.000Z"
-  },
-  "metadata": {
-    "correlationId": "550e8400-e29b-41d4-a716-446655440000",
-    "timestamp": "2026-10-22T10:15:30.123Z"
-  }
-}
-```
-
----
-
-### 2.2. `GET /api/v1/catalog/products` - Consulta Paginada de Catálogo
-
-#### Query Parameters
-* `page` (Integer, opcional, default: `1`): Número de página.
-* `limit` (Integer, opcional, default: `20`, máx: `100`): Tamaño de página.
-* `search` (String, opcional): Búsqueda por SKU, código de barras o nombre.
-* `category` (String, opcional): Filtro por categoría.
-* `isActive` (Boolean, opcional, default: `true`).
-
-#### Respuesta Exitosa: `200 OK`
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "sku": "ABAR-ARROZ-COSTE-50K",
-      "barcode": "7750123456789",
-      "name": "Arroz Costeño Extra Saco 50 Kg",
-      "unitOfMeasure": "KGM",
-      "retailPrice": 185.00,
-      "wholesaleMinPrice": 172.50,
-      "isPerishable": true,
-      "isActive": true
-    }
-  ],
-  "pagination": {
-    "currentPage": 1,
-    "pageSize": 20,
-    "totalRecords": 1450,
-    "totalPages": 73
-  }
-}
-```
-
----
-
-## 3. Módulo 2: Control de Inventarios y Kardex
-
----
-
-### 3.1. `POST /api/v1/inventory/movements/inflows` - Registro de Entrada (Compra)
-
-#### Descripción
-Registra el ingreso físico de mercadería a un almacén determinado, sustentado en una factura de proveedor o guía de remisión, y recalcula automáticamente el **Costo Promedio Ponderado** del producto actualizando el Kardex inmutable.
-
-#### Request Body
-```json
-{
-  "warehouseId": "d3b07384-d113-40a2-9b26-8094a45a3287",
-  "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "batchCode": "LOTE-2026-X45",
-  "expirationDate": "2027-10-15",
-  "sunatOperationType": "02",
-  "quantity": 100.0,
-  "unitCostWithoutTax": 142.50,
-  "documentReference": {
-    "documentTypeCode": "01",
-    "series": "F001",
-    "number": "00045612",
-    "supplierRuc": "20551234567"
-  },
-  "notes": "Ingreso según OC-2026-0089 Proveedor Molinera del Centro"
-}
-```
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "kardexEntryId": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-    "movementTimestamp": "2026-10-22T10:20:00Z",
-    "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-    "warehouseId": "d3b07384-d113-40a2-9b26-8094a45a3287",
-    "operationType": "02",
-    "inflow": {
-      "quantity": 100.0,
-      "unitCost": 142.500000,
-      "totalCost": 14250.00
-    },
-    "balance": {
-      "accumulatedPhysicalQuantity": 150.0,
-      "newAverageUnitCost": 141.666667,
-      "newTotalCostBalance": 21250.00
-    }
-  }
-}
-```
-
----
-
-### 3.2. `POST /api/v1/inventory/movements/transfers` - Traslado Interalmacén
-
-#### Descripción
-Inicia o completa el movimiento físico de mercancía entre dos almacenes de la empresa (ej. de Almacén Central hacia Almacén Tienda 01).
-
-#### Request Body
-```json
-{
-  "sourceWarehouseId": "d3b07384-d113-40a2-9b26-8094a45a3287",
-  "targetWarehouseId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "quantity": 25.0,
-  "dispatchNoteSeries": "T001",
-  "dispatchNoteNumber": "00000145"
-}
-```
-
-#### Respuesta Exitosa: `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "transferId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-    "status": "COMPLETED",
-    "sourceWarehouseRemaining": 125.0,
-    "targetWarehouseNewBalance": 55.0,
-    "transferTimestamp": "2026-10-22T10:25:00Z"
-  }
-}
-```
-
----
-
-### 3.3. `GET /api/v1/inventory/kardex` - Consulta de Kardex Permanente
-
-#### Query Parameters
-* `warehouseId` (UUID, obligatorio): Identificador del almacén.
-* `productId` (UUID, obligatorio): Identificador del producto.
-* `startDate` (Date, obligatorio, formato `YYYY-MM-DD`): Fecha de inicio.
-* `endDate` (Date, obligatorio, formato `YYYY-MM-DD`): Fecha de fin.
-
-#### Respuesta Exitosa: `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "warehouse": {
-      "warehouseId": "d3b07384-d113-40a2-9b26-8094a45a3287",
-      "code": "ALM-CENTRAL",
-      "name": "Almacén Central Mayorista"
-    },
-    "product": {
-      "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "sku": "ABAR-ARROZ-COSTE-50K",
-      "name": "Arroz Costeño Extra Saco 50 Kg",
-      "unitOfMeasure": "KGM"
-    },
-    "period": {
-      "startDate": "2026-10-01",
-      "endDate": "2026-10-22"
-    },
-    "entries": [
-      {
-        "timestamp": "2026-10-01T08:00:00Z",
-        "operationCode": "16",
-        "operationDescription": "Saldo Inicial",
-        "document": "INV-0001",
-        "inflow": { "quantity": 50.0, "unitCost": 140.00, "total": 7000.00 },
-        "outflow": { "quantity": 0.0, "unitCost": 0.00, "total": 0.00 },
-        "balance": { "quantity": 50.0, "unitCost": 140.00, "total": 7000.00 }
-      },
-      {
-        "timestamp": "2026-10-22T10:20:00Z",
-        "operationCode": "02",
-        "operationDescription": "Compra Nacional",
-        "document": "F001-00045612",
-        "inflow": { "quantity": 100.0, "unitCost": 142.50, "total": 14250.00 },
-        "outflow": { "quantity": 0.0, "unitCost": 0.00, "total": 0.00 },
-        "balance": { "quantity": 150.0, "unitCost": 141.666667, "total": 21250.00 }
-      }
-    ]
-  }
-}
-```
-
----
-
-## 4. Módulo 3: Clientes, Proveedores y Líneas de Crédito
-
----
-
-### 4.1. `POST /api/v1/directory/customers` - Registro de Cliente
-
-#### Descripción
-Registra un nuevo cliente para venta minorista o mayorista. Valida que el documento de identidad cumpla estrictamente con el **Catálogo N° 06 de la SUNAT** (DNI de 8 dígitos numéricos o RUC de 11 dígitos con dígito verificador).
-
-#### Request Body
-```json
-{
-  "identityDocumentType": "6",
-  "identityDocumentNumber": "20601234567",
-  "legalName": "DISTRIBUIDORA Y COMERCIALIZADORA DEL NORTE S.A.C.",
-  "tradeName": "DISNORTE",
-  "customerType": "WHOLESALE",
-  "email": "facturacion@disnorte.pe",
-  "phone": "+51999888777",
-  "fiscalAddress": {
-    "ubigeo": "150101",
-    "department": "LIMA",
-    "province": "LIMA",
-    "district": "LIMA",
-    "addressLine": "Av. Materiales Nro. 2450 Int. 3B"
-  },
-  "creditProfile": {
-    "creditLimit": 50000.00,
-    "creditTermDays": 30
-  }
-}
-```
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "customerId": "8f3b6c20-639a-4c96-857e-f4a43a0d1e55",
-    "identityDocumentType": "6",
-    "identityDocumentNumber": "20601234567",
-    "legalName": "DISTRIBUIDORA Y COMERCIALIZADORA DEL NORTE S.A.C.",
-    "customerType": "WHOLESALE",
-    "creditLimit": 50000.00,
-    "creditTermDays": 30,
-    "isCreditBlocked": false
-  }
-}
-```
-
----
-
-## 5. Módulo 4: Operaciones de Venta (Retail POS y Mayorista)
-
----
-
-### 5.1. `POST /api/v1/sales/pos` - Venta Rápida Minorista (Checkout)
-
-#### Descripción
-Endpoint de alto rendimiento para el mostrador de ventas minoristas. En una sola transacción ACID en PostgreSQL: deduce stock disponible, genera la venta comercial, registra el comprobante fiscal localmente y programa el evento en la tabla Outbox.
-
-#### Headers Requeridos
-* `Idempotency-Key`: UUID (Obligatorio).
-
-#### Request Body
-```json
-{
-  "dispatchWarehouseId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "customerId": "8f3b6c20-639a-4c96-857e-f4a43a0d1e55",
-  "paymentCondition": "CASH",
-  "currency": "PEN",
-  "documentType": "03",
-  "series": "B001",
-  "items": [
-    {
-      "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "quantity": 2.0,
-      "unitPrice": 185.00
-    }
-  ],
-  "cashReceivedAmount": 400.00
-}
-```
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "saleOrderId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "document": {
-      "documentId": "c8a7d519-8685-48fa-bb4b-7a3d24269d01",
-      "documentType": "03",
-      "fullNumber": "B001-00012450",
-      "issueDate": "2026-10-22",
-      "issueTime": "10:35:12",
-      "status": "XML_SIGNED_OUTBOX_PENDING",
-      "digestValue": "9Zf23xKl0O71eYh3aB8/4rTxL9E="
-    },
-    "totals": {
-      "taxableAmount": 313.56,
-      "igvAmount": 56.44,
-      "totalAmount": 370.00
-    },
-    "cashChangeDue": 30.00,
-    "ticketPrintUrl": "/api/v1/billing/documents/c8a7d519-8685-48fa-bb4b-7a3d24269d01/pdf?format=ticket80mm"
-  }
-}
-```
-
----
-
-### 5.2. `POST /api/v1/sales/wholesale/orders` - Creación de Pedido Mayorista
-
-#### Descripción
-Genera una orden de venta corporativa con reserva de stock en almacén central y asignación de condiciones de crédito comercial.
-
-#### Request Body
-```json
-{
-  "customerId": "8f3b6c20-639a-4c96-857e-f4a43a0d1e55",
-  "dispatchWarehouseId": "d3b07384-d113-40a2-9b26-8094a45a3287",
-  "paymentCondition": "CREDIT_30D",
-  "currency": "PEN",
-  "items": [
-    {
-      "productId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "quantity": 50.0,
-      "unitPrice": 172.50
-    }
-  ]
-}
-```
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "orderId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    "orderStatus": "CONFIRMED",
-    "customerId": "8f3b6c20-639a-4c96-857e-f4a43a0d1e55",
-    "totalPayable": 8625.00,
-    "reservedStockExpiresAt": "2026-10-23T18:00:00Z",
-    "creditEvaluation": {
-      "isApproved": true,
-      "creditLimit": 50000.00,
-      "currentDebt": 12000.00,
-      "availableCreditAfterOrder": 29375.00
-    }
-  }
-}
-```
-
----
-
-## 6. Módulo 5: Facturación Electrónica UBL 2.1 e Integración SUNAT
-
----
-
-### 6.1. `POST /api/v1/billing/invoices` - Emisión Directa de Comprobante
-
-#### Descripción
-Convierte un pedido mayorista o venta aprobada en un Comprobante de Pago Electrónico formal bajo el estándar **OASIS UBL 2.1**, incorporando los requisitos de la **Resolución de Superintendencia N° 193-2020/SUNAT** para operaciones a crédito (desglose de cuotas y fechas de vencimiento).
-
-#### Request Body
-```json
-{
-  "saleOrderId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "documentTypeCode": "01",
-  "series": "F001",
-  "issueDate": "2026-10-22",
-  "paymentTerms": {
-    "type": "Credito",
-    "totalPendingAmount": 8625.00,
-    "installments": [
-      {
-        "installmentNumber": 1,
-        "amount": 4312.50,
-        "dueDate": "2026-11-06"
-      },
-      {
-        "installmentNumber": 2,
-        "amount": 4312.50,
-        "dueDate": "2026-11-21"
-      }
-    ]
-  }
-}
-```
-
-#### Respuesta Exitosa: `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "documentId": "e3b0c442-98fc-1c14-9afbf4c8996fb924",
-    "documentType": "01",
-    "series": "F001",
-    "correlative": 8540,
-    "fullNumber": "F001-00008540",
-    "issueDate": "2026-10-22",
-    "documentStatus": "XML_SIGNED_OUTBOX_PENDING",
-    "digestValue": "G8b12Nlk3P4QW0rS9/1uVxY7Z2M=",
-    "xmlDownloadUrl": "/api/v1/billing/documents/e3b0c442-98fc-1c14-9afbf4c8996fb924/xml",
-    "pdfDownloadUrl": "/api/v1/billing/documents/e3b0c442-98fc-1c14-9afbf4c8996fb924/pdf"
-  }
-}
-```
-
----
-
-### 6.2. `GET /api/v1/billing/documents/{id}/cdr` - Consulta de CDR de SUNAT
-
-#### Descripción
-Retorna la información deserializada y oficial de la Constancia de Recepción (CDR) emitida por la SUNAT tras la transmisión del comprobante electrónico.
-
-#### Respuesta Exitosa: `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "documentId": "e3b0c442-98fc-1c14-9afbf4c8996fb924",
-    "fullNumber": "F001-00008540",
-    "cdrStatus": "ACCEPTED",
-    "sunatResponseCode": "0",
-    "sunatDescription": "La Factura numero F001-00008540, ha sido aceptada",
-    "receiptTimestamp": "2026-10-22T10:40:15Z",
-    "cdrHash": "K9v21Lm02X31eYh3aB8/4rTxL9E=",
-    "observations": [],
-    "cdrZipDownloadUrl": "/api/v1/billing/documents/e3b0c442-98fc-1c14-9afbf4c8996fb924/cdr/download"
-  }
-}
-```
-
----
-
-## 7. Módulo 6: Migración de Datos Legados (ETL Spec)
-
----
-
-### 7.1. `POST /api/v1/migration/jobs/stock-balances` - Carga de Saldos Iniciales
-
-#### Descripción
-Endpoint de uso restringido para el Administrador de TI (`ACT-01`). Permite cargar en bloque el inventario inicial valorizado desde el sistema legado, garantizando la reconciliación previa a la apertura operativa.
-
-#### Request Body
-```json
-{
-  "cutoffDate": "2026-09-30",
-  "warehouseCode": "ALM-CENTRAL",
-  "reconciliationSignature": "SIG-ADM-99482-OK",
-  "records": [
-    {
-      "sku": "ABAR-ARROZ-COSTE-50K",
-      "quantity": 150.0,
-      "unitCostWithoutTax": 140.00,
-      "batchCode": "LOTE-LEGADO-001",
-      "expirationDate": "2027-08-31"
-    },
-    {
-      "sku": "ABAR-AZUCAR-PARAM-50K",
-      "quantity": 80.0,
-      "unitCostWithoutTax": 128.50
-    }
-  ]
-}
-```
-
-#### Respuesta Exitosa: `202 Accepted`
-```json
-{
-  "success": true,
-  "data": {
-    "jobId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "status": "PROCESSING",
-    "totalRecordsSubmitted": 2,
-    "submittedAt": "2026-10-22T10:45:00Z",
-    "statusTrackingUrl": "/api/v1/migration/jobs/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-  }
-}
-```
-
----
-
-### 7.2. `GET /api/v1/migration/jobs/{jobId}` - Reporte de Conciliación
-
-#### Respuesta Exitosa: `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "jobId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "target": "INITIAL_STOCK_BALANCES",
-    "status": "RECONCILED",
-    "totalRecords": 2,
-    "successfulRecords": 2,
-    "failedRecords": 0,
-    "auditSummary": {
-      "totalUnitsLoaded": 230.0,
-      "totalInventoryValuePEN": 31280.00,
-      "kardexEntriesGenerated": 2
-    },
-    "errors": []
-  }
-}
-```
+|---|---|
+| Entregable | Especificación de endpoints y servicios mediante contratos API |
+| OpenAPI | [`specs/api/sistema-comercial.openapi.yaml`](../specs/api/sistema-comercial.openapi.yaml) |
+| Especificación funcional base | [`specs/features/002-sistema-comercial-facturacion.md`](../specs/features/002-sistema-comercial-facturacion.md) |
+| Versión del contrato | `0.1.0` |
+| Estado | `DRAFT - PROPUESTA PARA VALIDACIÓN` |
+| Base de rutas | `/api/v1` |
+| Host de producción | Pendiente; no se fija una URL de producción |
+
+> **Límite de aprobación:** SPEC-002 continúa en `DRAFT`; el análisis de requisitos también mantiene asuntos abiertos y los documentos de dominio/DTO no están consolidados. Este documento y el OpenAPI son una propuesta para revisión, no una autorización de implementación ni una afirmación de cumplimiento tributario. Las ampliaciones de DTO y operaciones se señalan como propuestas o pendientes.
+
+## 1. Fuentes y criterios de diseño
+
+Se revisaron las instrucciones del repositorio (`AGENTS.md`), el flujo Spec-First descrito en `README.md` y `specs/README.md`, los requisitos, el modelo, los DTOs/Schemas, la arquitectura, los ADRs y el contrato API previo.
+
+Fuentes del dominio disponibles:
+
+- [`01_Analisis_Requisitos/analisis_requisitos.md`](../01_Analisis_Requisitos/analisis_requisitos.md): identificadores RF/RNF/RN, clasificaciones de certeza y preguntas aún abiertas.
+- [`02_Modelo_Dominio/modelo_dominio.md`](../02_Modelo_Dominio/modelo_dominio.md): modelo conceptual en español, relaciones e invariantes declaradas.
+- [`03_DTOs_Schemas/dtos_schemas.md`](../03_DTOs_Schemas/dtos_schemas.md): DTOs y algunos schemas de entrada/salida.
+- [`04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md`](../04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md), [`ADR-0002`](../specs/architecture/adrs/0002-arquitectura-hexagonal-mvc.md) y [`ADR-0003`](../specs/architecture/adrs/0003-persistencia-postgresql-kardex.md): responsabilidades MVC/hexagonales, puertos y PostgreSQL.
+
+El contrato usa DTOs de frontera y proyecciones de respuesta, no expone tablas ni entidades de persistencia. Los servicios indicados son puertos/casos de uso candidatos de la arquitectura; sus firmas no están aprobadas.
+
+## 2. Convenciones generales propuestas
+
+- JSON para solicitudes y respuestas; OpenAPI 3.1 y ruta versionada `/api/v1`.
+- Respuestas exitosas envueltas en `data`; las listas incluyen `pagination`.
+- Errores con `application/problem+json`, siguiendo Problem Details. `code` e `invalidParams` son extensiones de aplicación.
+- Autenticación bearer JWT por RNF-SEC-002. Emisor, audiencia, claims, scopes y asociación de roles a cada operación están pendientes; no se inventan roles de API.
+- Las operaciones de escritura usan `Idempotency-Key`. El contrato propone detectar reutilización de clave con un payload distinto como `409`; duración de retención y tratamiento definitivo de replay requieren aprobación.
+- `409` identifica conflictos de estado/concurrencia; `422` una regla de negocio no satisfecha; `404` un recurso no existente; `400` un payload inválido; `401/403` fallos de autenticación/autorización. No se fijan códigos SUNAT.
+- La escritura de venta y sus cambios de inventario debe ser atómica (RF-TRZ-002, RNF-DAT-001). El balance y el Kardex no se aceptan desde el cliente.
+- El precio final, descuentos permitidos, impuestos y totales son calculados o validados por el servidor. No se acepta un total enviado por el consumidor.
+- `202 Accepted` solo indica que la API recibió y registró una solicitud asíncrona; no implica envío, aceptación ni conformidad de SUNAT/OSE.
+
+## 3. Catálogo de operaciones
+
+Los identificadores, schemas normativos del borrador, parámetros completos, ejemplos y respuestas están en el archivo OpenAPI vinculado arriba. El cuadro resume el propósito y la dependencia de cada operación.
+
+| ID / operación | Propósito y RF | DTO de entrada/salida y entidades principales | Puerto / componente responsable |
+|---|---|---|---|
+| `listarCategorias` — `GET /api/v1/catalog/categories` | Consultar categorías. RF-CAT-001. | Proyección `CategoriaResumenDto` propuesta; `Categoria`. | `CatalogQueryPort` propuesto; controlador MVC de catálogo. |
+| `crearProducto` — `POST /api/v1/catalog/products` | Registrar catálogo y precios. RF-CAT-001/002/003/004. | `CrearProductoComandoDto`, `ProductoResumenDto`; `Producto`, `Categoria`, `EscalaPrecio`. | `ProductCatalogCommandPort` propuesto; controlador de catálogo. |
+| `listarProductos` — `GET /api/v1/catalog/products` | Filtrar y paginar el catálogo. RF-CAT-001. | `ProductoResumenDto`; `Producto`, `EscalaPrecio`. | `ProductCatalogQueryPort` propuesto. |
+| `obtenerProducto` — `GET /api/v1/catalog/products/{productId}` | Consultar producto. RF-CAT-001. | Proyección de producto; `Producto`, `Categoria`, `EscalaPrecio`. | `ProductCatalogQueryPort` propuesto. |
+| `actualizarProducto` — `PATCH /api/v1/catalog/products/{productId}` | Actualizar campos permitidos; excluir SKU/historial. RF-CAT-001/002. **Propuesta.** | `ActualizarProductoComandoDto` propuesto; `Producto`. | `ProductCatalogCommandPort` propuesto. |
+| `registrarCambioEscalaPrecio` — `POST /api/v1/catalog/price-tiers` | Registrar vigencia de precio con motivo/auditoría. RF-CAT-002, RF-TRZ-003. **Propuesta.** | Entrada: `ActualizarEscalaPrecioComandoDto`; salida `EscalaPrecioResponse` propuesta. `Producto`, `EscalaPrecio`, `Usuario`. | `ProductCatalogCommandPort` propuesto. |
+| `listarAlmacenes` — `GET /api/v1/inventory/warehouses` | Consultar almacenes. RF-ALM-001. | `AlmacenResumenDto` propuesto; `Almacen`. | `WarehouseQueryPort` propuesto. |
+| `consultarExistencias` — `GET /api/v1/inventory/stocks` | Consultar saldo físico, reservado y disponible. RF-ALM-001/002. | `StockDisponibilidadDto`; `StockAlmacen`, `Producto`, `Almacen`. | `StockQueryPort` propuesto. |
+| `registrarRecepcion` — `POST /api/v1/inventory/receipts` | Registrar entrada y afectar stock/Kardex atómicamente. RF-ALM-003/002, RF-TRZ-002. | `RegistrarEntradaMercaderiaComandoDto`; `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario`, `StockAlmacen`, `Lote`. | `StockManagementServicePort`; controlador MVC de inventario. |
+| `listarRecepciones` — `GET /api/v1/inventory/receipts` | Consultar recepciones por filtros. RF-ALM-003. | `RecepcionResumenDto` propuesto; `RecepcionMercaderia`. | `StockQueryPort` propuesto. |
+| `obtenerRecepcion` — `GET /api/v1/inventory/receipts/{receiptId}` | Consultar recepción y líneas. RF-ALM-003, RF-TRZ-001. | Proyección de recepción propuesta; `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario`. | `StockQueryPort` propuesto. |
+| `listarMovimientosInventario` — `GET /api/v1/inventory/movements` | Consultar Kardex/movimientos, sin alterar el historial. RF-ALM-002/004, RF-TRZ-001. | Proyección de movimiento propuesta; `MovimientoInventario`, `Producto`, `Almacen`, `Lote`. | `StockQueryPort` propuesto. |
+| `listarLotes` — `GET /api/v1/inventory/lots` | Consultar lotes/vencimientos si se confirma este alcance. RF-CAT-004. **Pendiente de confirmación.** | Proyección de lote propuesta; `Lote`, `Producto`, `Almacen`. | `LotQueryPort` propuesto. |
+| `registrarTransferencia` — `POST /api/v1/inventory/transfers` | Iniciar traslado. RF-ALM-005/002. **Propuesta; falta contrato de recepción/discrepancias.** | `TransferirStockInteralmacenComandoDto`; `Almacen`, `StockAlmacen`, `MovimientoInventario`, `Lote`. | `StockManagementServicePort`; adaptador MVC de inventario. |
+| `registrarAjusteInventario` — `POST /api/v1/inventory/adjustments` | Registrar ajuste justificado y autorizado. RF-ALM-006/002, RF-TRZ-003. **Propuesta.** | `RegistrarAjusteInventarioComandoDto`; `StockAlmacen`, `MovimientoInventario`, `Usuario`. | `StockManagementServicePort`; adaptador MVC de inventario. |
+| `registrarCliente` — `POST /api/v1/directory/customers` | Registrar cliente y perfil comercial. RF-DIR-001/003. | `RegistrarClienteComandoDto`; `Cliente`. | `CustomerDirectoryCommandPort` propuesto. |
+| `listarClientes` — `GET /api/v1/directory/customers` | Buscar clientes con filtros/paginación. RF-DIR-001. | `ClienteResumenDto` propuesto; `Cliente`. | `CustomerDirectoryQueryPort` propuesto. |
+| `obtenerCliente` — `GET /api/v1/directory/customers/{customerId}` | Consultar cliente. RF-DIR-001. | Proyección de cliente propuesta; `Cliente`. | `CustomerDirectoryQueryPort` propuesto. |
+| `actualizarCliente` — `PATCH /api/v1/directory/customers/{customerId}` | Actualizar campos permitidos. RF-DIR-001/003. **Propuesta.** | `ActualizarClienteComandoDto` propuesto; `Cliente`. | `CustomerDirectoryCommandPort` propuesto. |
+| `registrarProveedor` — `POST /api/v1/directory/suppliers` | Registrar proveedor. RF-DIR-002. **Propuesta porque no hay DTO aprobado.** | `RegistrarProveedorComandoDto` propuesto; `Proveedor`. | `SupplierDirectoryCommandPort` propuesto. |
+| `listarProveedores` — `GET /api/v1/directory/suppliers` | Buscar proveedores. RF-DIR-002. | `ProveedorResumenDto` propuesto; `Proveedor`. | `SupplierDirectoryQueryPort` propuesto. |
+| `obtenerProveedor` — `GET /api/v1/directory/suppliers/{supplierId}` | Consultar proveedor. RF-DIR-002. | Proyección de proveedor propuesta; `Proveedor`. | `SupplierDirectoryQueryPort` propuesto. |
+| `registrarVentaRetail` — `POST /api/v1/sales/pos` | Venta minorista, detalle y stock atómicos. RF-VEN-001/003, RF-ALM-004, RF-TRZ-002, RNF-DAT-001. | `CrearVentaRetailPosComandoDto`, `VentaRetailResultadoDto`; `Venta`, `DetalleVenta`, `Cliente`, `Producto`, `StockAlmacen`, `MovimientoInventario`. | `SaleOrderServicePort`; controlador POS MVC. |
+| `registrarPedidoMayorista` — `POST /api/v1/sales/wholesale/orders` | Crear pedido y líneas; no confirma ni reserva por sí solo. RF-VEN-002. | `CrearPedidoMayoristaComandoDto`; `Venta`, `DetalleVenta`, `Cliente`. | `SaleOrderServicePort`; controlador mayorista MVC. |
+| `confirmarPedidoMayorista` — `POST /api/v1/sales/wholesale/orders/{saleId}/confirm` | Confirmar después de validar crédito y stock, aplicando la reserva atómicamente. RF-VEN-002, RF-DIR-003, RF-ALM-004, RF-TRZ-002. **Propuesta.** | Resultado propuesto; `Venta`, `Cliente`, `StockAlmacen`, `CuotaCredito`. | `SaleOrderServicePort`; controlador mayorista MVC. |
+| `listarVentas` — `GET /api/v1/sales` | Listar ventas/pedidos por filtros. RF-VEN-001/002. | `VentaResumenDto` propuesto; `Venta`, `Cliente`. | `SaleOrderQueryPort` propuesto. |
+| `obtenerVenta` — `GET /api/v1/sales/{saleId}` | Consultar venta y referencias de trazabilidad. RF-VEN-001/002, RF-TRZ-001. | `VentaDetalleDto` propuesto; `Venta`, `DetalleVenta`, `Cliente`, `MovimientoInventario`, `ComprobanteElectronico`. | `SaleOrderQueryPort` propuesto. |
+| `listarDetallesVenta` — `GET /api/v1/sales/{saleId}/details` | Consultar líneas de venta. RF-VEN-001/002, RF-TRZ-001. | `DetalleVentaDto` propuesto; `Venta`, `DetalleVenta`, `Producto`, `Lote`. | `SaleOrderQueryPort` propuesto. |
+| `solicitarEmisionComprobante` — `POST /api/v1/billing/documents` | Registrar solicitud de emisión asociada a una venta. RF-CPE-001/002/003, RF-SUN-001/002/004/005. | `EmitirComprobantePagoComandoDto`; respuesta de solicitud propuesta; `Venta`, `ComprobanteElectronico`, `DetalleComprobante`, `CuotaCredito`. | `ElectronicInvoicingServicePort`; controlador de facturación MVC y Outbox. |
+| `obtenerComprobante` — `GET /api/v1/billing/documents/{documentId}` | Consultar estado local y resultado externo disponible. RF-SUN-002/004, RF-TRZ-001. | `SunatCdrRespuestaDto` opcional y proyección de estado propuesta; `ComprobanteElectronico`. | `ElectronicInvoicingQueryPort` propuesto. |
+| `solicitarReintentoComprobante` — `POST /api/v1/billing/documents/{documentId}/retry` | Reintentar procesamiento existente sin duplicar documento. RF-SUN-004/005, RNF-REL-002. **Propuesta.** | Resultado de reintento propuesto; `ComprobanteElectronico`. | `ElectronicInvoicingServicePort`; worker/Outbox secundario. |
+| `iniciarCargaSaldosIniciales` — `POST /api/v1/migration/jobs/stock-balances` | Encolar carga de apertura. RF-MIG-002, RF-TRZ-001. | `IngestarSaldosLegadosComandoDto`, `TrabajoMigracionEstadoDto`; `MovimientoInventario`, `StockAlmacen`. | `DataMigrationServicePort`; adaptador de migración. |
+| `obtenerEstadoTrabajoMigracion` — `GET /api/v1/migration/jobs/{jobId}` | Consultar estado, errores y conciliación. RF-MIG-001/002/003. | `TrabajoMigracionEstadoDto`; `MigrationBatch` (modelo táctico pendiente de conciliación con modelo español). | `DataMigrationServicePort`; adaptador de migración. |
+
+## 4. Contratos y estados relevantes
+
+### Ventas e inventario
+
+- Las líneas llevan producto y cantidad; los totales son proyecciones calculadas por el servidor. Los precios del DTO POS existente requieren decisión explícita: aplicar lista de precios vigente o validar precio pactado.
+- La transacción de venta/stock/Kardex debe ser indivisible. Si no hay stock o existe conflicto concurrente, se rechaza y no se deja una venta parcialmente confirmada. No se permite sobregiro hasta resolver el conflicto entre RF-ALM-004 y RN-05.
+- El DTO de venta mayorista actual no incluye el calendario de cuotas que aparece en requisitos y comprobantes; debe reconciliarse.
+- El control de lote y la selección de lote al despachar solo aplican tras confirmar el alcance del RF-CAT-004 y resolver RN-PEND-02.
+
+### Emisión tributaria
+
+El contrato separa el resultado de la solicitud local (`202`, solicitud registrada) del ciclo externo. La consulta posterior puede indicar estado local pendiente/enviado y, únicamente si fue recibida, la respuesta externa y sus observaciones. No se define código de rechazo SUNAT ni se declara aceptación por el solo hecho de recibir `202`.
+
+### Idempotencia y concurrencia
+
+El mismo `Idempotency-Key` y payload debe evitar duplicar venta, recepción, movimiento o comprobante. Una clave reutilizada con otro payload debe ser conflicto. La política de retención y si un replay repite exactamente el status/response original están pendientes de aprobación. Para el inventario, la operación de aplicación debe proteger la lectura/cambio de stock bajo control transaccional acorde con RNF-DAT-001.
+
+## 5. Errores comunes
+
+| HTTP | Uso propuesto | Código de aplicación |
+|---|---|---|
+| `400` | JSON mal formado o schema inválido | `INVALID_PAYLOAD` |
+| `401` | Token faltante o inválido | `UNAUTHORIZED` |
+| `403` | Identidad autenticada sin permiso | `FORBIDDEN` |
+| `404` | Producto, cliente, proveedor, venta, documento o trabajo inexistente | `NOT_FOUND` |
+| `409` | Clave idempotente incompatible, duplicado, transición inválida o conflicto de concurrencia | `CONFLICT` |
+| `422` | Regla de negocio, crédito, stock o consistencia incumplida | `BUSINESS_RULE_VIOLATION` |
+| `500` | Error inesperado; respuesta no debe exponer detalles internos | `INTERNAL_SERVER_ERROR` |
+
+`ERR_INSUFFICIENT_STOCK` y `ERR_CREDIT_LIMIT_EXCEEDED` aparecen en documentos del dominio como candidatos; sus nombres y mapping definitivo de HTTP deben aprobarse con los requisitos. No se consideran códigos SUNAT.
+
+## 6. Matriz resumida de trazabilidad
+
+La matriz por operación está en §3. No hay operación definida sin RF asociado. El estado “propuesto” significa que el requisito existe, pero faltan DTO, decisión, validación de reglas o aprobación del stakeholder.
+
+| Grupo | RF/RNF | DTO(s) existentes | Entidades | Componente arquitectónico |
+|---|---|---|---|---|
+| Catálogo | RF-CAT-001/002/003/004 | `CrearProductoComandoDto`, `ProductoResumenDto` | `Producto`, `Categoria`, `EscalaPrecio` | Controlador MVC → puerto de catálogo → PostgreSQL adapter |
+| Inventario | RF-ALM-001/002/003/004/005/006, RF-TRZ-001/002/003, RNF-DAT-001 | `RegistrarEntradaMercaderiaComandoDto`, `TransferirStockInteralmacenComandoDto`, `RegistrarAjusteInventarioComandoDto`, `StockDisponibilidadDto` | `Almacen`, `StockAlmacen`, `Lote`, `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario` | Controlador MVC → `StockManagementServicePort` → repositorios PostgreSQL |
+| Directorio | RF-DIR-001/002/003 | `RegistrarClienteComandoDto` | `Cliente`, `Proveedor` | Controlador MVC → puertos de directorio → repositorios |
+| Ventas | RF-VEN-001/002/003, RF-ALM-004, RF-TRZ-002/003, RNF-DAT-001 | `CrearVentaRetailPosComandoDto`, `CrearPedidoMayoristaComandoDto`, `VentaRetailResultadoDto` | `Venta`, `DetalleVenta`, `CuotaCredito`, `StockAlmacen`, `MovimientoInventario` | Controladores POS/mayorista → `SaleOrderServicePort` → dominio y adaptadores |
+| Comprobantes | RF-CPE-001/002/003, RF-SUN-001/002/004/005, RF-TRZ-001, RNF-REL-002 | `EmitirComprobantePagoComandoDto`, `SunatCdrRespuestaDto` | `ComprobanteElectronico`, `DetalleComprobante`, `Venta` | Controlador MVC → `ElectronicInvoicingServicePort`; Outbox worker, signer y gateway como adaptadores |
+| Migración | RF-MIG-001/002/003, RF-TRZ-001 | `IngestarSaldosLegadosComandoDto`, `TrabajoMigracionEstadoDto` | `MovimientoInventario`, `StockAlmacen`, `MigrationBatch` | CLI/API de migración → `DataMigrationServicePort` → adaptador PostgreSQL/archivo |
+
+## 7. Informe de validación y decisiones pendientes
+
+### Resultado de comprobaciones
+
+- OpenAPI declara `3.1.0`, versión `0.1.0`, `operationId` únicos y rutas distintas.
+- Las operaciones listadas vinculan RF/RNF y proponen DTOs, entidades y puertos responsables mediante `x-requirements`, `x-dtos`, `x-domain-entities` y `x-application-port`.
+- La tabla de este documento coincide con las 33 combinaciones método/ruta del OpenAPI; las referencias internas comprobadas resuelven.
+- Las respuestas distinguen `201` para creación local, `200` para consulta y `202` para trabajos/solicitudes asíncronos. `202` no afirma aceptación de SUNAT.
+- Los contratos públicos son proyecciones DTO, no tablas ni entidades de persistencia.
+- Las solicitudes de venta no tienen un campo de total. El schema propuesto excluye el precio por línea recibido por el DTO POS existente y lo marca como discrepancia pendiente: la fuente de precio debe resolverse antes de aprobar.
+- El documento previo incluía ejemplos y decisiones que no se conservaron como contratos activos porque contradicen requisitos aún abiertos o afirman hechos no verificados. El mapeo siguiente conserva el propósito funcional y deja explícito qué debe revisarse:
+
+| Contrato anterior | Tratamiento en esta propuesta | Motivo / decisión pendiente |
+|---|---|---|
+| `POST /api/v1/inventory/movements/inflows` y su saldo con costo promedio | `POST /api/v1/inventory/receipts` | Se conserva el registro de recepción; el método de valorización no se fija mientras siga pendiente en requisitos. |
+| Transferencia presentada como completada en una operación | `POST /api/v1/inventory/transfers` | Se modela como inicio propuesto; faltan operación de recepción, discrepancias y ciclo de vida aprobados. |
+| `GET /api/v1/inventory/kardex` | `GET /api/v1/inventory/movements` | Se conserva la consulta de movimientos; filtros y proyección se expresan en el OpenAPI actual. |
+| Alta mayorista que confirmaba y reservaba stock inmediatamente | Crear pedido y confirmar mediante operaciones separadas | La confirmación y reserva requieren validación de stock/crédito; la segunda operación continúa propuesta. |
+| `POST /api/v1/billing/invoices` y `GET .../cdr` con códigos y resultados concretos | Solicitud asíncrona en `/api/v1/billing/documents` y consulta del documento | No se inventan códigos de SUNAT ni se presenta una aceptación tributaria como resultado garantizado. Los códigos y datos de respuesta externa dependen de fuentes y contratos por verificar. |
+| Actor/rol fijo para importar saldos y firma de conciliación específica | Trabajo de migración asíncrono con autenticación global | La autorización por rol, la evidencia de conciliación y la procedencia deben definirse; no se inventan claims ni firmas. |
+
+Los ejemplos anteriores tampoco son ejemplos normativos activos: incluyen datos, estados y validaciones tributarias que no se verificaron contra el modelo aprobado ni fuentes oficiales. Los ejemplos que permanezcan en el OpenAPI son ilustrativos.
+
+- El OpenAPI contiene ejemplos en 7 de 33 operaciones; completar ejemplos de solicitud y respuesta por operación es un pendiente antes de declarar satisfecho el nivel de detalle solicitado.
+- La comprobación de referencias y unicidad fue estática. No había un parser OpenAPI/YAML disponible en el entorno, por lo que la sintaxis no se validó formalmente con una herramienta.
+- No se validaron aquí obligaciones, umbrales, esquemas XSD/Schematron ni códigos SUNAT contra fuentes oficiales. Los identificadores y reglas fiscales que aparecen en requisitos requieren revisión documental independiente.
+
+### Pendientes bloqueantes para aprobar
+
+1. Aprobar/validar SPEC-002 y resolver las preguntas del análisis: método de valorización, alcance de lotes, modalidad de emisión (SEE/OSE), contingencia offline y profundidad de migración.
+2. Corregir la contradicción RF-ALM-004/RN-05 y completar RF-SUN-005 en el cuerpo de requisitos; definir el estado real de aprobación del modelo de dominio.
+3. Consolidar el modelo en español frente al segundo documento táctico en inglés; confirmar cardinalidades y ciclo de vida de venta, recepción, transferencia, lote y comprobante.
+4. Alinear los DTOs de solicitud/respuesta: precio POS, pagos mixtos, cuotas mayoristas, proveedor, consultas, actualizaciones, migración/procedencia y resultado de emisión.
+5. Definir RBAC por operación, políticas idempotentes, estados fiscales/locales y responsabilidades exactas del Outbox; resolver si el reintento manual existe.
+6. Verificar con enunciado original y fuentes oficiales los campos, validaciones y reglas tributarias antes de aprobar cualquier contrato fiscal. El enunciado original no está en los archivos examinados.
+
+## 8. Recomendación de flujo Spec-First
+
+No implementar controladores ni servicios sobre este borrador. Primero cerrar y aprobar los requisitos; después reconciliar el dominio y DTOs con las decisiones confirmadas; finalmente revisar este OpenAPI y el presente documento como `REVIEW` y `APPROVED`. La aprobación del contrato debe preceder la implementación y sus pruebas de contrato, conforme a `AGENTS.md` y `specs/README.md`.

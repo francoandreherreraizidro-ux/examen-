@@ -4,6 +4,14 @@ This directory contains contracts, schema definitions, and endpoint documentatio
 
 ---
 
+## Current API Contract
+
+- [`sistema-comercial.openapi.yaml`](./sistema-comercial.openapi.yaml) is the OpenAPI 3.1 **DRAFT** for the commercial-system API.
+- Its companion endpoint guide, traceability matrix, and validation notes are in [`05_Contratos_API/especificacion_contratos_api.md`](../../05_Contratos_API/especificacion_contratos_api.md).
+- The parent feature, `SPEC-002`, remains `DRAFT`. This contract is a proposal for review, not approval for implementation.
+- `x-status`, `x-pending`, and `x-requirements` extensions mark proposals, unresolved dependencies, and traceability in the YAML.
+- Existing DTOs are referenced where possible. A schema identified as proposed is not an approved DTO and must be reconciled with the domain model before contract approval.
+
 ## 📁 Recommended Organization
 
 - **Contract Markdown Specs**: Use [`../templates/api-contract.template.md`](../templates/api-contract.template.md) for Markdown-based contracts.

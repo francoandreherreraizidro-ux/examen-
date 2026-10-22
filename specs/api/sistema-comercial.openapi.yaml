@@ -1,0 +1,2844 @@
+openapi: 3.1.0
+info:
+  title: API del sistema comercial
+  version: 0.1.0
+  summary: Borrador de contratos REST para el sistema comercial
+  description: |
+    PROPUESTA DRAFT. SPEC-002 y los requisitos base siguen en DRAFT; el modelo
+    conceptual y los DTOs existentes presentan divergencias. Este documento no
+    congela contratos ni afirma cumplimiento tributario. Los elementos
+    marcados x-status: proposed o x-pending requieren validación antes de
+    aprobarse. No se fija un host de producción.
+  x-status: DRAFT
+  x-parent-spec: SPEC-002
+servers:
+  - url: /
+    description: Host y despliegue pendientes de confirmación
+tags:
+  - name: Catalogo
+  - name: Inventario
+  - name: Directorio
+  - name: Ventas
+  - name: Comprobantes
+  - name: Migracion
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/catalog/categories:
+    get:
+      operationId: listarCategorias
+      tags: [Catalogo]
+      summary: Listar categorías
+      description: Consulta de categorías existentes; no se especifica alta o edición de categorías en los requisitos actuales.
+      x-requirements: [RF-CAT-001]
+      x-dtos: [CategoriaResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Categoria]
+      x-application-port: CatalogQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de categorías
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriaPage'
+              example:
+                data:
+                  - categoriaId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+                    codigo: ABAR
+                    nombre: Abarrotes
+                    activa: true
+                pagination:
+                  page: 1
+                  pageSize: 20
+                  totalItems: 1
+                  totalPages: 1
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/catalog/products:
+    post:
+      operationId: crearProducto
+      tags: [Catalogo]
+      summary: Registrar producto
+      description: |
+        Crea un producto con su precio inicial. Los códigos de unidad y afectación
+        tributaria quedan sujetos a catálogos oficiales vigentes por verificar.
+      x-requirements: [RF-CAT-001, RF-CAT-002, RF-CAT-003, RF-CAT-004]
+      x-dtos:
+        - CrearProductoComandoDto (existente; pendiente de reconciliar)
+        - ProductoResumenDto (existente)
+      x-domain-entities: [Producto, Categoria, EscalaPrecio]
+      x-application-port: ProductCatalogCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearProductoComandoDto'
+            example:
+              sku: ARROZ-001
+              nombre: Arroz
+              categoriaId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              unidadMedida: NIU
+              afectacionIgvDefecto: '10'
+              esPerecible: false
+              escalasPrecioIniciales:
+                - tipoEscala: MINORISTA_ESTANDAR
+                  cantidadMinima: 1
+                  precioUnitarioConIgv: 10.5
+                  moneda: PEN
+                  fechaInicio: '2026-10-22'
+      responses:
+        '201':
+          description: Producto registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+              example:
+                data:
+                  productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                  sku: ARROZ-001
+                  nombre: Arroz
+                  unidadMedida: NIU
+                  esPerecible: false
+                  activo: true
+                metadata:
+                  correlationId: 7e8f9012-3456-4789-abcd-ef0123456789
+                  timestamp: '2026-10-22T15:00:00Z'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    get:
+      operationId: listarProductos
+      tags: [Catalogo]
+      summary: Buscar y listar productos
+      x-requirements: [RF-CAT-001]
+      x-dtos: [ProductoResumenDto (existente)]
+      x-domain-entities: [Producto, EscalaPrecio]
+      x-application-port: ProductCatalogQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: texto
+          in: query
+          description: Búsqueda por SKU, código de barras o nombre.
+          schema:
+            type: string
+            maxLength: 100
+        - name: categoriaId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: activo
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Página de productos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/catalog/products/{productId}:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      operationId: obtenerProducto
+      tags: [Catalogo]
+      summary: Consultar producto por identificador
+      x-requirements: [RF-CAT-001]
+      x-dtos: [ProductoResumenDto (existente)]
+      x-domain-entities: [Producto, Categoria, EscalaPrecio]
+      x-application-port: ProductCatalogQueryPort (propuesto)
+      responses:
+        '200':
+          description: Producto encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    patch:
+      operationId: actualizarProducto
+      tags: [Catalogo]
+      summary: Actualizar datos permitidos del producto
+      description: |
+        La propuesta restringe los cambios a datos descriptivos y estado lógico.
+        SKU e historial no se modifican. El conjunto exacto de campos editables
+        debe aprobarse junto con el modelo y el DTO de actualización.
+      x-status: proposed
+      x-requirements: [RF-CAT-001, RF-CAT-002]
+      x-dtos: [ActualizarProductoComandoDto (propuesto; DTO no definido)]
+      x-domain-entities: [Producto]
+      x-application-port: ProductCatalogCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarProductoComandoDto'
+      responses:
+        '200':
+          description: Producto actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/catalog/price-tiers:
+    post:
+      operationId: registrarCambioEscalaPrecio
+      tags: [Catalogo]
+      summary: Registrar nueva vigencia de una escala de precio
+      description: |
+        Registra un cambio de precio con motivo y vigencia para conservar la
+        trazabilidad histórica. La semántica exacta de versionado y prevención
+        de rangos de vigencia solapados debe aprobarse.
+      x-status: proposed
+      x-requirements: [RF-CAT-002, RF-TRZ-003]
+      x-dtos:
+        - ActualizarEscalaPrecioComandoDto (existente; verificar si es alta/versionado o actualización)
+        - EscalaPrecioResponse (propuesto; DTO de salida no definido)
+      x-domain-entities: [Producto, EscalaPrecio, Usuario]
+      x-application-port: ProductCatalogCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarEscalaPrecioComandoDto'
+            example:
+              productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              tipoEscala: MINORISTA_ESTANDAR
+              cantidadMinima: 1
+              nuevoPrecioUnitarioConIgv: 11
+              moneda: PEN
+              fechaInicioVigencia: '2026-11-01'
+              motivoModificacion: Actualización de lista comercial
+      responses:
+        '201':
+          description: Nueva vigencia registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscalaPrecioResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/warehouses:
+    get:
+      operationId: listarAlmacenes
+      tags: [Inventario]
+      summary: Listar almacenes
+      x-requirements: [RF-ALM-001]
+      x-dtos: [AlmacenResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Almacen]
+      x-application-port: WarehouseQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de almacenes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlmacenPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/stocks:
+    get:
+      operationId: consultarExistencias
+      tags: [Inventario]
+      summary: Consultar existencias por almacén y producto
+      x-requirements: [RF-ALM-001, RF-ALM-002]
+      x-dtos: [StockDisponibilidadDto (existente)]
+      x-domain-entities: [StockAlmacen, Producto, Almacen]
+      x-application-port: StockQueryPort (propuesto)
+      parameters:
+        - name: almacenId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: productoId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Existencias disponibles; el servidor calcula cantidades y costos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/receipts:
+    post:
+      operationId: registrarRecepcion
+      tags: [Inventario]
+      summary: Registrar recepción de mercadería
+      description: Registra líneas recibidas; la actualización de existencias y los asientos de Kardex deben ser atómicos.
+      x-requirements: [RF-ALM-003, RF-ALM-002, RF-CAT-004, RF-TRZ-002]
+      x-dtos: [RegistrarEntradaMercaderiaComandoDto (existente)]
+      x-domain-entities: [RecepcionMercaderia, DetalleRecepcion, MovimientoInventario, StockAlmacen, Lote]
+      x-application-port: StockManagementServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarEntradaMercaderiaComandoDto'
+            example:
+              almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              proveedorId: 4b5c6d7e-8f90-4123-abcd-ef0123456789
+              documentoSustento:
+                tipoComprobante: '01'
+                serie: F001
+                numero: '000123'
+                fechaEmisionComprobante: '2026-10-22'
+              items:
+                - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                  cantidadRecibida: 10
+                  costoUnitarioSinIgv: 5
+      responses:
+        '201':
+          description: Recepción registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecepcionResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    get:
+      operationId: listarRecepciones
+      tags: [Inventario]
+      summary: Listar recepciones
+      x-requirements: [RF-ALM-003]
+      x-dtos: [RecepcionResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [RecepcionMercaderia]
+      x-application-port: StockQueryPort (propuesto)
+      parameters:
+        - name: proveedorId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: almacenId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: desde
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de recepciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecepcionPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/receipts/{receiptId}:
+    get:
+      operationId: obtenerRecepcion
+      tags: [Inventario]
+      summary: Consultar recepción y detalles
+      x-requirements: [RF-ALM-003, RF-TRZ-001]
+      x-dtos: [RecepcionDetalleDto (propuesto; DTO no definido)]
+      x-domain-entities: [RecepcionMercaderia, DetalleRecepcion, MovimientoInventario]
+      x-application-port: StockQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      responses:
+        '200':
+          description: Recepción y sus líneas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecepcionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/movements:
+    get:
+      operationId: listarMovimientosInventario
+      tags: [Inventario]
+      summary: Consultar movimientos de inventario
+      x-requirements: [RF-ALM-002, RF-ALM-004, RF-TRZ-001]
+      x-dtos: [MovimientoInventarioResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [MovimientoInventario, Producto, Almacen, Lote]
+      x-application-port: StockQueryPort (propuesto)
+      parameters:
+        - name: almacenId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: productoId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: desde
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Movimientos paginados en orden cronológico
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/lots:
+    get:
+      operationId: listarLotes
+      tags: [Inventario]
+      summary: Consultar lotes y vencimientos
+      description: Operación aplicable solo si se confirma el control de lotes para productos perecibles.
+      x-status: pending-confirmation
+      x-requirements: [RF-CAT-004]
+      x-dtos: [LoteResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Lote, Producto, Almacen]
+      x-application-port: LotQueryPort (propuesto)
+      parameters:
+        - name: almacenId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: productoId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: venceAntesDe
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Lotes que cumplen los filtros
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotePage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/transfers:
+    post:
+      operationId: registrarTransferencia
+      tags: [Inventario]
+      summary: Registrar traslado entre almacenes
+      description: La propuesta requiere completar el ciclo de despacho y recepción; el contrato de transferencia existente no define ambas fases ni discrepancias.
+      x-status: proposed
+      x-requirements: [RF-ALM-005, RF-ALM-002]
+      x-dtos: [TransferirStockInteralmacenComandoDto (existente; insuficiente para confirmar recepción)]
+      x-domain-entities: [Almacen, StockAlmacen, MovimientoInventario, Lote]
+      x-application-port: StockManagementServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferirStockInteralmacenComandoDto'
+      responses:
+        '201':
+          description: Traslado iniciado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferenciaResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/inventory/adjustments:
+    post:
+      operationId: registrarAjusteInventario
+      tags: [Inventario]
+      summary: Registrar ajuste de inventario
+      description: Ajuste justificado sujeto a autorización del rol que apruebe el responsable del negocio.
+      x-status: proposed
+      x-requirements: [RF-ALM-006, RF-ALM-002, RF-TRZ-003]
+      x-dtos: [RegistrarAjusteInventarioComandoDto (existente)]
+      x-domain-entities: [StockAlmacen, MovimientoInventario, Usuario]
+      x-application-port: StockManagementServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarAjusteInventarioComandoDto'
+      responses:
+        '201':
+          description: Ajuste registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/directory/customers:
+    post:
+      operationId: registrarCliente
+      tags: [Directorio]
+      summary: Registrar cliente
+      x-requirements: [RF-DIR-001, RF-DIR-003]
+      x-dtos: [RegistrarClienteComandoDto (existente)]
+      x-domain-entities: [Cliente]
+      x-application-port: CustomerDirectoryCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarClienteComandoDto'
+      responses:
+        '201':
+          description: Cliente registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    get:
+      operationId: listarClientes
+      tags: [Directorio]
+      summary: Listar y filtrar clientes
+      x-requirements: [RF-DIR-001]
+      x-dtos: [ClienteResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Cliente]
+      x-application-port: CustomerDirectoryQueryPort (propuesto)
+      parameters:
+        - name: tipoDocumentoIdentidad
+          in: query
+          schema:
+            type: string
+        - name: numeroDocumento
+          in: query
+          schema:
+            type: string
+        - name: tipoCliente
+          in: query
+          schema:
+            type: string
+            enum: [MINORISTA, MAYORISTA]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de clientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientePage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/directory/customers/{customerId}:
+    parameters:
+      - $ref: '#/components/parameters/CustomerId'
+    get:
+      operationId: obtenerCliente
+      tags: [Directorio]
+      summary: Consultar cliente
+      x-requirements: [RF-DIR-001]
+      x-dtos: [ClienteResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Cliente]
+      x-application-port: CustomerDirectoryQueryPort (propuesto)
+      responses:
+        '200':
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    patch:
+      operationId: actualizarCliente
+      tags: [Directorio]
+      summary: Actualizar datos permitidos del cliente
+      description: DTO y lista de campos modificables pendientes de definición y validación.
+      x-status: proposed
+      x-requirements: [RF-DIR-001, RF-DIR-003]
+      x-dtos: [ActualizarClienteComandoDto (propuesto; DTO no definido)]
+      x-domain-entities: [Cliente]
+      x-application-port: CustomerDirectoryCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarClienteComandoDto'
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/directory/suppliers:
+    post:
+      operationId: registrarProveedor
+      tags: [Directorio]
+      summary: Registrar proveedor
+      x-status: proposed
+      x-requirements: [RF-DIR-002]
+      x-dtos: [RegistrarProveedorComandoDto (propuesto; DTO no definido)]
+      x-domain-entities: [Proveedor]
+      x-application-port: SupplierDirectoryCommandPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarProveedorComandoDto'
+      responses:
+        '201':
+          description: Proveedor registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveedorResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+    get:
+      operationId: listarProveedores
+      tags: [Directorio]
+      summary: Listar y filtrar proveedores
+      x-requirements: [RF-DIR-002]
+      x-dtos: [ProveedorResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Proveedor]
+      x-application-port: SupplierDirectoryQueryPort (propuesto)
+      parameters:
+        - name: ruc
+          in: query
+          schema:
+            type: string
+        - name: texto
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de proveedores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveedorPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/directory/suppliers/{supplierId}:
+    get:
+      operationId: obtenerProveedor
+      tags: [Directorio]
+      summary: Consultar proveedor
+      x-requirements: [RF-DIR-002]
+      x-dtos: [ProveedorResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Proveedor]
+      x-application-port: SupplierDirectoryQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200':
+          description: Proveedor encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveedorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales/pos:
+    post:
+      operationId: registrarVentaRetail
+      tags: [Ventas]
+      summary: Registrar venta minorista POS
+      description: |
+        Crea la venta con sus líneas y actualiza existencias en una única
+        transacción. El servidor calcula importes, descuentos autorizados e
+        impuestos; el cliente no envía totales. La fuente del precio unitario
+        debe quedar definida en el DTO/modelo antes de aprobar el contrato.
+      x-requirements: [RF-VEN-001, RF-VEN-003, RF-ALM-004, RF-TRZ-002, RNF-DAT-001]
+      x-dtos:
+        - CrearVentaRetailPosComandoDto (existente; el campo precioUnitarioConIgv requiere revisión)
+        - VentaRetailResultadoDto (existente)
+      x-domain-entities: [Venta, DetalleVenta, Cliente, Producto, StockAlmacen, MovimientoInventario, ComprobanteElectronico]
+      x-application-port: SaleOrderServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearVentaRetailPosComandoDto'
+            example:
+              almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              cajaNumero: 1
+              tipoComprobanteDeseado: '03'
+              medioPago:
+                tipo: EFECTIVO
+                montoRecibido: 25
+              items:
+                - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                  cantidad: 2
+      responses:
+        '201':
+          description: Venta registrada localmente; no implica aceptación de SUNAT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaRetailResponse'
+              example:
+                data:
+                  ventaId: 6d7e8f90-1234-4567-89ab-cdef01234567
+                  canalVenta: RETAIL_POS
+                  estado: CONFIRMADA
+                  clienteId: null
+                  almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+                  totalPagar: 21
+                  detalles:
+                    - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                      cantidad: 2
+                      precioUnitarioConIgv: 10.5
+                      totalLinea: 21
+                  comprobanteId: null
+                  montoVueltoEfectivo: 4
+                  estadoComprobante: PENDIENTE_PROCESAMIENTO
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales/wholesale/orders:
+    post:
+      operationId: registrarPedidoMayorista
+      tags: [Ventas]
+      summary: Crear pedido mayorista
+      description: |
+        Registra el pedido y sus líneas. La confirmación comercial, evaluación
+        de crédito y eventual reserva se separan en una operación posterior. El
+        comportamiento del campo solicitaReservaInmediata del DTO existente
+        debe revisarse antes de aprobar el contrato.
+      x-requirements: [RF-VEN-002, RF-DIR-003, RF-ALM-004, RF-TRZ-002]
+      x-dtos:
+        - CrearPedidoMayoristaComandoDto (existente; cuotas y pagos requieren revisión)
+        - PedidoMayoristaResultadoDto (propuesto; DTO no definido)
+      x-domain-entities: [Venta, DetalleVenta, CuotaCredito, Cliente, StockAlmacen]
+      x-application-port: SaleOrderServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearPedidoMayoristaComandoDto'
+      responses:
+        '201':
+          description: Pedido creado; no implica confirmación, emisión ni aceptación tributaria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoMayoristaResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales/wholesale/orders/{saleId}/confirm:
+    post:
+      operationId: confirmarPedidoMayorista
+      tags: [Ventas]
+      summary: Confirmar pedido mayorista
+      description: |
+        Propuesta para la transición comercial: vuelve a validar crédito y
+        existencias y, si procede, confirma el pedido y reserva stock en una
+        operación atómica. Política y permisos de aprobación pendientes.
+      x-status: proposed
+      x-requirements: [RF-VEN-002, RF-DIR-003, RF-ALM-004, RF-TRZ-002]
+      x-dtos: [ConfirmarPedidoMayoristaResultadoDto (propuesto; DTO no definido)]
+      x-domain-entities: [Venta, Cliente, StockAlmacen, CuotaCredito]
+      x-application-port: SaleOrderServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Pedido confirmado y reserva aplicada, si correspondía.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PedidoMayoristaResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales:
+    get:
+      operationId: listarVentas
+      tags: [Ventas]
+      summary: Listar ventas con filtros
+      x-requirements: [RF-VEN-001, RF-VEN-002]
+      x-dtos: [VentaResumenDto (propuesto; DTO no definido)]
+      x-domain-entities: [Venta, Cliente]
+      x-application-port: SaleOrderQueryPort (propuesto)
+      parameters:
+        - name: canalVenta
+          in: query
+          schema:
+            type: string
+            enum: [RETAIL_POS, MAYORISTA]
+        - name: clienteId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: estado
+          in: query
+          schema:
+            type: string
+        - name: desde
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: hasta
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de ventas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaPage'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales/{saleId}:
+    get:
+      operationId: obtenerVenta
+      tags: [Ventas]
+      summary: Consultar venta
+      x-requirements: [RF-VEN-001, RF-VEN-002, RF-TRZ-001]
+      x-dtos: [VentaDetalleDto (propuesto; DTO no definido)]
+      x-domain-entities: [Venta, DetalleVenta, Cliente, MovimientoInventario, ComprobanteElectronico]
+      x-application-port: SaleOrderQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+      responses:
+        '200':
+          description: Venta con sus detalles y referencias disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaDetalleResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/sales/{saleId}/details:
+    get:
+      operationId: listarDetallesVenta
+      tags: [Ventas]
+      summary: Consultar líneas de una venta
+      x-requirements: [RF-VEN-001, RF-VEN-002, RF-TRZ-001]
+      x-dtos: [DetalleVentaDto (propuesto; DTO no definido)]
+      x-domain-entities: [Venta, DetalleVenta, Producto, Lote]
+      x-application-port: SaleOrderQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Líneas de la venta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetalleVentaPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/billing/documents:
+    post:
+      operationId: solicitarEmisionComprobante
+      tags: [Comprobantes]
+      summary: Solicitar emisión de comprobante asociado a venta
+      description: |
+        202 significa que la solicitud quedó registrada para procesamiento. No
+        significa que el XML se haya enviado o que SUNAT/OSE lo haya aceptado.
+        La secuencia exacta de generación, firma y persistencia está pendiente de
+        resolución en la arquitectura y el modelo.
+      x-requirements: [RF-CPE-001, RF-CPE-002, RF-CPE-003, RF-SUN-001, RF-SUN-002, RF-SUN-004, RF-SUN-005]
+      x-dtos:
+        - EmitirComprobantePagoComandoDto (existente; requiere reconciliación)
+        - ComprobanteSolicitudResultadoDto (propuesto; DTO no definido)
+      x-domain-entities: [Venta, ComprobanteElectronico, DetalleComprobante, CuotaCredito]
+      x-application-port: ElectronicInvoicingServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirComprobantePagoComandoDto'
+            example:
+              ventaId: 6d7e8f90-1234-4567-89ab-cdef01234567
+              tipoComprobante: '01'
+              serie: F001
+              fechaEmision: '2026-10-22'
+              formaPago:
+                tipo: Contado
+      responses:
+        '202':
+          description: Solicitud aceptada por la API; procesamiento tributario pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteSolicitudResponse'
+              example:
+                data:
+                  documentoId: 8f901234-5678-4abc-9def-0123456789ab
+                  ventaId: 6d7e8f90-1234-4567-89ab-cdef01234567
+                  estadoSolicitud: ACEPTADA_POR_API
+                  estadoTributario: PENDIENTE_PROCESAMIENTO
+                metadata:
+                  correlationId: 7e8f9012-3456-4789-abcd-ef0123456789
+                  timestamp: '2026-10-22T15:01:00Z'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/billing/documents/{documentId}:
+    get:
+      operationId: obtenerComprobante
+      tags: [Comprobantes]
+      summary: Consultar comprobante, estado y resultado
+      description: Devuelve el estado local y, solo si existe respuesta externa, los datos recibidos. No inventa un resultado de SUNAT.
+      x-requirements: [RF-SUN-002, RF-SUN-004, RF-TRZ-001]
+      x-dtos: [SunatCdrRespuestaDto (existente; respuesta externa opcional), ComprobanteEstadoDto (propuesto)]
+      x-domain-entities: [ComprobanteElectronico]
+      x-application-port: ElectronicInvoicingQueryPort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Estado y resultado disponible del comprobante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteResponse'
+              example:
+                data:
+                  documentoId: 8f901234-5678-4abc-9def-0123456789ab
+                  ventaId: 6d7e8f90-1234-4567-89ab-cdef01234567
+                  tipoComprobante: '01'
+                  serie: F001
+                  correlativo: 123
+                  estadoLocal: PENDIENTE_ENVIO
+                  estadoTributario: PENDIENTE_ENVIO
+                  resultadoExterno: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/billing/documents/{documentId}/retry:
+    post:
+      operationId: solicitarReintentoComprobante
+      tags: [Comprobantes]
+      summary: Solicitar reintento seguro de procesamiento
+      description: |
+        Propuesta para casos recuperables. Reutiliza el mismo comprobante y
+        artefacto firmado existente; nunca crea otra serie/correlativo. Se
+        rechaza si el estado ya es terminal o el reintento no es permitido.
+        La política automática/manual, roles y estados reintentables requieren
+        confirmación.
+      x-status: proposed
+      x-requirements: [RF-SUN-004, RF-SUN-005, RNF-REL-002]
+      x-dtos: [ReintentoComprobanteResultadoDto (propuesto; DTO no definido)]
+      x-domain-entities: [ComprobanteElectronico]
+      x-application-port: ElectronicInvoicingServicePort (propuesto)
+      parameters:
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Reintento aceptado para procesamiento; resultado externo aún pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteSolicitudResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/migration/jobs/stock-balances:
+    post:
+      operationId: iniciarCargaSaldosIniciales
+      tags: [Migracion]
+      summary: Iniciar carga de saldos iniciales
+      description: La aceptación del trabajo no significa que la conciliación haya terminado; cada registro debe conservar la procedencia del origen legado.
+      x-requirements: [RF-MIG-002, RF-TRZ-001]
+      x-dtos:
+        - IngestarSaldosLegadosComandoDto (existente; falta contrato de procedencia)
+        - TrabajoMigracionEstadoDto (existente)
+      x-domain-entities: [MovimientoInventario, StockAlmacen]
+      x-application-port: DataMigrationServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestarSaldosLegadosComandoDto'
+      responses:
+        '202':
+          description: Trabajo encolado; procesamiento y conciliación pendientes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationJobResponse'
+        '200':
+          $ref: '#/components/responses/IdempotentReplay'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+  /api/v1/migration/jobs/{jobId}:
+    get:
+      operationId: obtenerEstadoTrabajoMigracion
+      tags: [Migracion]
+      summary: Consultar estado y conciliación de migración
+      x-requirements: [RF-MIG-001, RF-MIG-002, RF-MIG-003]
+      x-dtos: [TrabajoMigracionEstadoDto (existente)]
+      x-domain-entities: [MigrationBatch (modelo táctico; relación con entidades españolas por reconciliar)]
+      x-application-port: DataMigrationServicePort (arquitectura existente; firma pendiente)
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Estado conocido del trabajo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationJobResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/CommonErrors'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        RNF-SEC-002 exige autenticación y autorización por roles. Emisor,
+        audiencia, claims, scopes y correspondencia rol-operación están
+        pendientes de confirmación; no se fijan credenciales ni proveedor.
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Número de página, comenzando en 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      description: Máximo de resultados por página; límite propuesto sujeto a validación.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Clave para evitar repetir una mutación. Retención y formato final pendientes; reutilizar con payload distinto debe producir conflicto.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SupplierId:
+      name: supplierId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SaleId:
+      name: saleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    CommonErrors:
+      description: |
+        Errores comunes retornados como application/problem+json. Los códigos
+        posibles son 400 (payload inválido), 401 (no autenticado), 403 (sin
+        autorización) y 500 (error interno). Las operaciones también declaran
+        respuestas específicas como 404, 409 y 422 cuando corresponden.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Recurso inexistente
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Recurso no encontrado
+            status: 404
+            detail: No se encontró el recurso solicitado.
+            code: NOT_FOUND
+    Conflict:
+      description: Conflicto de estado, duplicidad o concurrencia
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Conflicto
+            status: 409
+            detail: La operación entra en conflicto con el estado actual del recurso.
+            code: CONFLICT
+    BusinessRuleViolation:
+      description: Regla de negocio incumplida; el código específico se define tras validar las reglas.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Regla de negocio incumplida
+            status: 422
+            detail: La operación no puede completarse con el estado actual.
+            code: BUSINESS_RULE_VIOLATION
+    IdempotentReplay:
+      description: Reintento idempotente de una solicitud ya procesada.
+      headers:
+        Idempotency-Replayed:
+          schema:
+            type: boolean
+          description: Indica que la respuesta corresponde al resultado almacenado de la solicitud original.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/GenericSuccess'
+  schemas:
+    Pagination:
+      type: object
+      required: [page, pageSize, totalItems, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+        totalItems:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    Problem:
+      type: object
+      description: Problem Details con código de aplicación opcional; no se exponen secretos ni datos internos.
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          description: Código estable de aplicación; no es un código de rechazo SUNAT salvo que la respuesta externa lo provea.
+        invalidParams:
+          type: array
+          items:
+            type: object
+            required: [name, reason]
+            properties:
+              name:
+                type: string
+              reason:
+                type: string
+      required: [title, status]
+    GenericSuccess:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    ResponseMetadata:
+      type: object
+      properties:
+        correlationId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+    CrearProductoComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#CrearProductoComandoDto
+      required: [sku, nombre, categoriaId, unidadMedida, afectacionIgvDefecto, esPerecible, escalasPrecioIniciales]
+      properties:
+        sku:
+          type: string
+          minLength: 3
+          maxLength: 50
+        codigoBarras:
+          type: string
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 255
+        descripcion:
+          type: string
+        categoriaId:
+          type: string
+          format: uuid
+        unidadMedida:
+          type: string
+          description: Código del catálogo de unidades vigente; valores específicos por verificar.
+        codigoSunat:
+          type: string
+        afectacionIgvDefecto:
+          type: string
+          description: Código de afectación pendiente de cotejo con catálogo vigente.
+        esPerecible:
+          type: boolean
+        escalasPrecioIniciales:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/EscalaPrecioEntrada'
+      additionalProperties: false
+    EscalaPrecioEntrada:
+      type: object
+      required: [tipoEscala, cantidadMinima, precioUnitarioConIgv, moneda, fechaInicio]
+      properties:
+        tipoEscala:
+          type: string
+        cantidadMinima:
+          type: number
+          exclusiveMinimum: 0
+        precioUnitarioConIgv:
+          type: number
+          exclusiveMinimum: 0
+        moneda:
+          type: string
+          enum: [PEN, USD]
+        fechaInicio:
+          type: string
+          format: date
+      additionalProperties: false
+    ActualizarEscalaPrecioComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#ActualizarEscalaPrecioComandoDto
+      examples:
+        - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+          tipoEscala: MINORISTA_ESTANDAR
+          cantidadMinima: 1
+          nuevoPrecioUnitarioConIgv: 11
+          moneda: PEN
+          fechaInicioVigencia: '2026-11-01'
+          motivoModificacion: Actualizacion de lista comercial
+      required: [productoId, tipoEscala, cantidadMinima, nuevoPrecioUnitarioConIgv, moneda, fechaInicioVigencia, motivoModificacion]
+      properties:
+        productoId:
+          type: string
+          format: uuid
+        tipoEscala:
+          type: string
+          enum: [MINORISTA_ESTANDAR, MAYORISTA_NIVEL_1, MAYORISTA_NIVEL_2]
+        cantidadMinima:
+          type: number
+          minimum: 1
+        nuevoPrecioUnitarioConIgv:
+          type: number
+          exclusiveMinimum: 0
+        moneda:
+          type: string
+          enum: [PEN, USD]
+        fechaInicioVigencia:
+          type: string
+          format: date
+        fechaFinVigencia:
+          type: string
+          format: date
+        motivoModificacion:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    EscalaPrecioResponse:
+      type: object
+      x-status: proposed
+      x-pending: Definir DTO de salida y campos de auditoría expuestos
+      examples:
+        - data:
+            productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+            tipoEscala: MINORISTA_ESTANDAR
+            precioUnitarioConIgv: 11
+            fechaInicio: '2026-11-01'
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [productoId, tipoEscala, precioUnitarioConIgv, fechaInicio]
+          properties:
+            productoId:
+              type: string
+              format: uuid
+            tipoEscala:
+              type: string
+            precioUnitarioConIgv:
+              type: number
+            fechaInicio:
+              type: string
+              format: date
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    ActualizarProductoComandoDto:
+      type: object
+      x-status: proposed
+      examples:
+        - nombre: Arroz
+          descripcion: Arroz de grano largo en saco de 5 kg
+          categoriaId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+          maxLength: 255
+        descripcion:
+          type: string
+        categoriaId:
+          type: string
+          format: uuid
+        activo:
+          type: boolean
+      minProperties: 1
+      additionalProperties: false
+    ProductoDto:
+      type: object
+      required: [productoId, sku, nombre, unidadMedida, esPerecible, activo]
+      properties:
+        productoId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        codigoBarras:
+          type: [string, 'null']
+        nombre:
+          type: string
+        unidadMedida:
+          type: string
+        categoriaNombre:
+          type: [string, 'null']
+        esPerecible:
+          type: boolean
+        activo:
+          type: boolean
+        precioMinoristaActual:
+          type: [number, 'null']
+          description: Proyección calculada por el servidor.
+        precioMayoristaMinimo:
+          type: [number, 'null']
+          description: Proyección calculada por el servidor.
+    ProductoResponse:
+      type: object
+      examples:
+        - data:
+            productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+            sku: ARROZ-001
+            codigoBarras: null
+            nombre: Arroz
+            unidadMedida: NIU
+            categoriaNombre: Abarrotes
+            esPerecible: false
+            activo: true
+            precioMinoristaActual: 11
+            precioMayoristaMinimo: 10.5
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductoDto'
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    ProductoPage:
+      type: object
+      examples:
+        - data:
+            - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              sku: ARROZ-001
+              codigoBarras: null
+              nombre: Arroz
+              unidadMedida: NIU
+              categoriaNombre: Abarrotes
+              esPerecible: false
+              activo: true
+              precioMinoristaActual: 11
+              precioMayoristaMinimo: 10.5
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductoDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    CategoriaResumenDto:
+      type: object
+      required: [categoriaId, codigo, nombre, activa]
+      properties:
+        categoriaId:
+          type: string
+          format: uuid
+        codigo:
+          type: string
+        nombre:
+          type: string
+        activa:
+          type: boolean
+    CategoriaPage:
+      type: object
+      examples:
+        - data:
+            - categoriaId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              codigo: ABAR
+              nombre: Abarrotes
+              activa: true
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoriaResumenDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    AlmacenDto:
+      type: object
+      required: [almacenId, codigo, nombre, activo]
+      properties:
+        almacenId:
+          type: string
+          format: uuid
+        codigo:
+          type: string
+        nombre:
+          type: string
+        codigoEstablecimientoSunat:
+          type: [string, 'null']
+        activo:
+          type: boolean
+    AlmacenPage:
+      type: object
+      examples:
+        - data:
+            - almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              codigo: ALM-CENTRAL
+              nombre: Almacen central
+              codigoEstablecimientoSunat: null
+              activo: true
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlmacenDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    StockDto:
+      type: object
+      required: [almacenId, productoId, cantidadFisica, cantidadReservada, cantidadDisponible]
+      properties:
+        almacenId:
+          type: string
+          format: uuid
+        almacenNombre:
+          type: [string, 'null']
+        productoId:
+          type: string
+          format: uuid
+        sku:
+          type: [string, 'null']
+        cantidadFisica:
+          type: number
+        cantidadReservada:
+          type: number
+        cantidadDisponible:
+          type: number
+          description: Calculada por servidor como cantidad física menos reserva.
+        costoPromedioUnitarioPEN:
+          type: [number, 'null']
+        lotesDisponibles:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoteDto'
+    StockPage:
+      type: object
+      examples:
+        - data:
+            - almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              almacenNombre: Almacen central
+              productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              sku: ARROZ-001
+              cantidadFisica: 40
+              cantidadReservada: 5
+              cantidadDisponible: 35
+              costoPromedioUnitarioPEN: 8.25
+              lotesDisponibles: []
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    RegistrarEntradaMercaderiaComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#RegistrarEntradaMercaderiaComandoDto
+      required: [almacenId, proveedorId, documentoSustento, items]
+      properties:
+        almacenId:
+          type: string
+          format: uuid
+        proveedorId:
+          type: string
+          format: uuid
+        documentoSustento:
+          type: object
+          required: [tipoComprobante, serie, numero, fechaEmisionComprobante]
+          properties:
+            tipoComprobante:
+              type: string
+              enum: ['01', '09']
+            serie:
+              type: string
+            numero:
+              type: string
+            fechaEmisionComprobante:
+              type: string
+              format: date
+          additionalProperties: false
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DetalleEntradaDto'
+        observaciones:
+          type: string
+      additionalProperties: false
+    DetalleEntradaDto:
+      type: object
+      required: [productoId, cantidadRecibida, costoUnitarioSinIgv]
+      properties:
+        productoId:
+          type: string
+          format: uuid
+        cantidadRecibida:
+          type: number
+          exclusiveMinimum: 0
+        costoUnitarioSinIgv:
+          type: number
+          exclusiveMinimum: 0
+        lote:
+          $ref: '#/components/schemas/LoteEntradaDto'
+      additionalProperties: false
+    LoteEntradaDto:
+      type: object
+      required: [codigoLote, fechaVencimiento]
+      properties:
+        codigoLote:
+          type: string
+        fechaFabricacion:
+          type: string
+          format: date
+        fechaVencimiento:
+          type: string
+          format: date
+      additionalProperties: false
+    RecepcionDto:
+      type: object
+      required: [recepcionId, numeroRecepcion, fechaRecepcion, estado, items]
+      properties:
+        recepcionId:
+          type: string
+          format: uuid
+        numeroRecepcion:
+          type: string
+        fechaRecepcion:
+          type: string
+          format: date-time
+        proveedorId:
+          type: string
+          format: uuid
+        almacenId:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          description: Estado local definido por el dominio, pendiente de normalización.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleEntradaDto'
+    RecepcionResponse:
+      type: object
+      examples:
+        - data:
+            recepcionId: 8a4b5c6d-7e8f-4012-9abc-def012345678
+            numeroRecepcion: REC-000042
+            fechaRecepcion: '2026-10-22T16:00:00Z'
+            proveedorId: 4b5c6d7e-8f90-4123-abcd-ef0123456789
+            almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+            estado: REGISTRADA
+            items:
+              - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                cantidadRecibida: 10
+                costoUnitarioSinIgv: 5
+          metadata:
+            correlationId: 7e8f9012-3456-4789-abcd-ef0123456789
+            timestamp: '2026-10-22T16:00:00Z'
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RecepcionDto'
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    RecepcionPage:
+      type: object
+      examples:
+        - data:
+            - recepcionId: 8a4b5c6d-7e8f-4012-9abc-def012345678
+              numeroRecepcion: REC-000042
+              fechaRecepcion: '2026-10-22T16:00:00Z'
+              proveedorId: 4b5c6d7e-8f90-4123-abcd-ef0123456789
+              almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              estado: REGISTRADA
+              items: []
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecepcionDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    MovimientoDto:
+      type: object
+      required: [movimientoId, fechaHora, almacenId, productoId, tipoOperacion, cantidadEntrada, cantidadSalida, saldoCantidad]
+      properties:
+        movimientoId:
+          type: string
+          format: uuid
+        fechaHora:
+          type: string
+          format: date-time
+        almacenId:
+          type: string
+          format: uuid
+        productoId:
+          type: string
+          format: uuid
+        loteId:
+          type: [string, 'null']
+          format: uuid
+        tipoOperacion:
+          type: string
+          description: Valor del dominio; correspondencia con catálogo fiscal pendiente de verificación.
+        cantidadEntrada:
+          type: number
+        cantidadSalida:
+          type: number
+        saldoCantidad:
+          type: number
+        saldoCostoUnitario:
+          type: [number, 'null']
+    MovimientoPage:
+      type: object
+      examples:
+        - data:
+            - movimientoId: 9a4b5c6d-7e8f-4012-9abc-def012345678
+              fechaHora: '2026-10-22T16:00:00Z'
+              almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              loteId: null
+              tipoOperacion: ENTRADA_RECEPCION
+              cantidadEntrada: 10
+              cantidadSalida: 0
+              saldoCantidad: 50
+              saldoCostoUnitario: 8.25
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    MovimientoResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MovimientoDto'
+    LoteDto:
+      type: object
+      required: [loteId, productoId, almacenId, codigoLote, fechaVencimiento, cantidadRestante]
+      properties:
+        loteId:
+          type: string
+          format: uuid
+        productoId:
+          type: string
+          format: uuid
+        almacenId:
+          type: string
+          format: uuid
+        codigoLote:
+          type: string
+        fechaVencimiento:
+          type: string
+          format: date
+        cantidadRestante:
+          type: number
+    LotePage:
+      type: object
+      examples:
+        - data:
+            - loteId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+              productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+              codigoLote: LOTE-2026-001
+              fechaVencimiento: '2027-10-22'
+              cantidadRestante: 10
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoteDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    TransferirStockInteralmacenComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#TransferirStockInteralmacenComandoDto
+      examples:
+        - almacenOrigenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+          almacenDestinoId: 4a4b5c6d-7e8f-4012-9abc-def012345678
+          items:
+            - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              cantidadATransferir: 5
+              loteId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+          motivoTraslado: Reabastecimiento
+          generarGuiaRemision: false
+      required: [almacenOrigenId, almacenDestinoId, items, motivoTraslado, generarGuiaRemision]
+      properties:
+        almacenOrigenId:
+          type: string
+          format: uuid
+        almacenDestinoId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productoId, cantidadATransferir]
+            properties:
+              productoId:
+                type: string
+                format: uuid
+              cantidadATransferir:
+                type: number
+                exclusiveMinimum: 0
+              loteId:
+                type: string
+                format: uuid
+        motivoTraslado:
+          type: string
+        generarGuiaRemision:
+          type: boolean
+      additionalProperties: false
+    TransferenciaResponse:
+      type: object
+      x-status: proposed
+      examples:
+        - data:
+            transferenciaId: 7a4b5c6d-7e8f-4012-9abc-def012345678
+            estado: REGISTRADA
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [transferenciaId, estado]
+          properties:
+            transferenciaId:
+              type: string
+              format: uuid
+            estado:
+              type: string
+              description: Estado de flujo pendiente de definición (despachada, en tránsito, recibida).
+    RegistrarAjusteInventarioComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#RegistrarAjusteInventarioComandoDto
+      examples:
+        - almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+          productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+          loteId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+          tipoAjuste: SOBRANTE_POSITIVO
+          cantidadAjuste: 2
+          costoUnitarioValorizacion: 8.25
+          motivoDetallado: Diferencia verificada en conteo
+          aprobadoPorUsuarioId: 7a4b5c6d-7e8f-4012-9abc-def012345678
+      required: [almacenId, productoId, tipoAjuste, cantidadAjuste, costoUnitarioValorizacion, motivoDetallado, aprobadoPorUsuarioId]
+      properties:
+        almacenId:
+          type: string
+          format: uuid
+        productoId:
+          type: string
+          format: uuid
+        loteId:
+          type: string
+          format: uuid
+        tipoAjuste:
+          type: string
+          enum: [SOBRANTE_POSITIVO, FALTANTE_MERMA_NEGATIVO]
+        cantidadAjuste:
+          type: number
+          exclusiveMinimum: 0
+        costoUnitarioValorizacion:
+          type: number
+          minimum: 0
+        motivoDetallado:
+          type: string
+          minLength: 1
+        aprobadoPorUsuarioId:
+          type: string
+          format: uuid
+      additionalProperties: false
+    RegistrarClienteComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#RegistrarClienteComandoDto
+      examples:
+        - tipoDocumentoIdentidad: '1'
+          numeroDocumento: '12345678'
+          nombreORazonSocial: Cliente de ejemplo
+          direccionFiscal:
+            ubigeo: '150101'
+            departamento: Lima
+            provincia: Lima
+            distrito: Lima
+            direccionDetallada: Direccion de ejemplo
+          tipoCliente: MINORISTA
+      required: [tipoDocumentoIdentidad, numeroDocumento, nombreORazonSocial, direccionFiscal, tipoCliente]
+      properties:
+        tipoDocumentoIdentidad:
+          type: string
+        numeroDocumento:
+          type: string
+        nombreORazonSocial:
+          type: string
+          minLength: 1
+        nombreComercial:
+          type: string
+        direccionFiscal:
+          type: object
+          properties:
+            ubigeo:
+              type: string
+            departamento:
+              type: string
+            provincia:
+              type: string
+            distrito:
+              type: string
+            direccionDetallada:
+              type: string
+          additionalProperties: true
+        correoElectronico:
+          type: string
+          format: email
+        telefono:
+          type: string
+        tipoCliente:
+          type: string
+          enum: [MINORISTA, MAYORISTA]
+        perfilCredito:
+          type: object
+          properties:
+            limiteCreditoMonetario:
+              type: number
+              minimum: 0
+            plazoDiasCredito:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+      additionalProperties: false
+    ActualizarClienteComandoDto:
+      type: object
+      x-status: proposed
+      examples:
+        - nombreORazonSocial: Cliente actualizado
+          correoElectronico: cliente@example.test
+      properties:
+        nombreORazonSocial:
+          type: string
+        nombreComercial:
+          type: [string, 'null']
+        direccionFiscal:
+          type: object
+          additionalProperties: true
+        correoElectronico:
+          type: [string, 'null']
+          format: email
+        telefono:
+          type: [string, 'null']
+        perfilCredito:
+          type: object
+          additionalProperties: true
+      minProperties: 1
+      additionalProperties: false
+    ClienteDto:
+      type: object
+      required: [clienteId, tipoDocumentoIdentidad, numeroDocumento, nombreORazonSocial, tipoCliente]
+      properties:
+        clienteId:
+          type: string
+          format: uuid
+        tipoDocumentoIdentidad:
+          type: string
+        numeroDocumento:
+          type: string
+        nombreORazonSocial:
+          type: string
+        nombreComercial:
+          type: [string, 'null']
+        tipoCliente:
+          type: string
+          enum: [MINORISTA, MAYORISTA]
+        limiteCredito:
+          type: [number, 'null']
+        plazoCreditoDias:
+          type: [integer, 'null']
+    ClienteResponse:
+      type: object
+      examples:
+        - data:
+            clienteId: 5a4b5c6d-7e8f-4012-9abc-def012345678
+            tipoDocumentoIdentidad: '1'
+            numeroDocumento: '12345678'
+            nombreORazonSocial: Cliente de ejemplo
+            nombreComercial: null
+            tipoCliente: MINORISTA
+            limiteCredito: null
+            plazoCreditoDias: null
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ClienteDto'
+    ClientePage:
+      type: object
+      examples:
+        - data:
+            - clienteId: 5a4b5c6d-7e8f-4012-9abc-def012345678
+              tipoDocumentoIdentidad: '1'
+              numeroDocumento: '12345678'
+              nombreORazonSocial: Cliente de ejemplo
+              nombreComercial: null
+              tipoCliente: MINORISTA
+              limiteCredito: null
+              plazoCreditoDias: null
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClienteDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    RegistrarProveedorComandoDto:
+      type: object
+      x-status: proposed
+      examples:
+        - ruc: '20123456789'
+          razonSocial: Proveedor de ejemplo S.A.C.
+          direccionFiscal: Direccion de ejemplo
+          correoElectronico: proveedor@example.test
+      required: [ruc, razonSocial]
+      properties:
+        ruc:
+          type: string
+          description: Formato sujeto a verificación contra el catálogo/regla oficial aplicable.
+        razonSocial:
+          type: string
+          minLength: 1
+        direccionFiscal:
+          type: string
+        telefono:
+          type: string
+        correoElectronico:
+          type: string
+          format: email
+      additionalProperties: false
+    ProveedorDto:
+      type: object
+      required: [proveedorId, ruc, razonSocial, activo]
+      properties:
+        proveedorId:
+          type: string
+          format: uuid
+        ruc:
+          type: string
+        razonSocial:
+          type: string
+        activo:
+          type: boolean
+    ProveedorResponse:
+      type: object
+      examples:
+        - data:
+            proveedorId: 4b5c6d7e-8f90-4123-abcd-ef0123456789
+            ruc: '20123456789'
+            razonSocial: Proveedor de ejemplo S.A.C.
+            activo: true
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ProveedorDto'
+    ProveedorPage:
+      type: object
+      examples:
+        - data:
+            - proveedorId: 4b5c6d7e-8f90-4123-abcd-ef0123456789
+              ruc: '20123456789'
+              razonSocial: Proveedor de ejemplo S.A.C.
+              activo: true
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProveedorDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    CrearVentaRetailPosComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#CrearVentaRetailPosComandoDto
+      x-pending: El DTO fuente permite precioUnitarioConIgv en cada línea. Determinar si el servidor aplica precios vigentes o valida un precio pactado; no permitir que el cliente determine totales.
+      required: [almacenId, cajaNumero, tipoComprobanteDeseado, medioPago, items]
+      properties:
+        almacenId:
+          type: string
+          format: uuid
+        cajaNumero:
+          type: integer
+          minimum: 1
+        cliente:
+          $ref: '#/components/schemas/ClienteVentaDto'
+        tipoComprobanteDeseado:
+          type: string
+          enum: ['03', '01']
+        medioPago:
+          type: object
+          required: [tipo, montoRecibido]
+          properties:
+            tipo:
+              type: string
+              enum: [EFECTIVO, TARJETA_DEBITO, TARJETA_CREDITO, BILLETERA_DIGITAL]
+            montoRecibido:
+              type: number
+              minimum: 0
+            codigoReferenciaTransaccion:
+              type: string
+          additionalProperties: false
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productoId, cantidad]
+            properties:
+              productoId:
+                type: string
+                format: uuid
+              cantidad:
+                type: number
+                exclusiveMinimum: 0
+              descuentoLinea:
+                type: number
+                minimum: 0
+            additionalProperties: false
+      additionalProperties: false
+    ClienteVentaDto:
+      type: object
+      required: [tipoDocumento, numeroDocumento, nombreRazonSocial]
+      properties:
+        tipoDocumento:
+          type: string
+        numeroDocumento:
+          type: string
+        nombreRazonSocial:
+          type: string
+      additionalProperties: false
+    CrearPedidoMayoristaComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#CrearPedidoMayoristaComandoDto
+      x-pending: Las cuotas, pagos mixtos y reglas de reserva requieren validación y extensión del DTO fuente antes de aprobar.
+      examples:
+        - clienteId: 5a4b5c6d-7e8f-4012-9abc-def012345678
+          almacenDespachoId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+          modalidadPago: CONTADO
+          moneda: PEN
+          items:
+            - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              cantidadSolicitada: 20
+          solicitaReservaInmediata: false
+      required: [clienteId, almacenDespachoId, modalidadPago, moneda, items, solicitaReservaInmediata]
+      properties:
+        clienteId:
+          type: string
+          format: uuid
+        almacenDespachoId:
+          type: string
+          format: uuid
+        modalidadPago:
+          type: string
+          enum: [CONTADO, CREDITO_COMERCIAL]
+        plazoCreditoDias:
+          type: integer
+          minimum: 1
+        moneda:
+          type: string
+          enum: [PEN, USD]
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productoId, cantidadSolicitada]
+            properties:
+              productoId:
+                type: string
+                format: uuid
+              cantidadSolicitada:
+                type: number
+                exclusiveMinimum: 0
+            additionalProperties: false
+        fechaEntregaComprometida:
+          type: string
+          format: date
+        solicitaReservaInmediata:
+          type: boolean
+          description: Campo del DTO fuente; efecto y compatibilidad con confirmación posterior pendientes de resolver.
+      allOf:
+        - if:
+            properties:
+              modalidadPago:
+                const: CREDITO_COMERCIAL
+            required: [modalidadPago]
+          then:
+            required: [plazoCreditoDias]
+      additionalProperties: false
+    VentaItemDto:
+      type: object
+      required: [productoId, cantidad, precioUnitarioConIgv, totalLinea]
+      properties:
+        productoId:
+          type: string
+          format: uuid
+        cantidad:
+          type: number
+        precioUnitarioConIgv:
+          type: number
+        descuentoLinea:
+          type: number
+        totalLinea:
+          type: number
+          description: Calculado en servidor.
+    VentaDto:
+      type: object
+      required: [ventaId, canalVenta, estado, totalPagar, detalles]
+      properties:
+        ventaId:
+          type: string
+          format: uuid
+        canalVenta:
+          type: string
+          enum: [RETAIL_POS, MAYORISTA]
+        estado:
+          type: string
+        clienteId:
+          type: [string, 'null']
+          format: uuid
+        almacenId:
+          type: string
+          format: uuid
+        totalPagar:
+          type: number
+          description: Calculado por servidor; nunca aceptado como total de entrada.
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/VentaItemDto'
+        comprobanteId:
+          type: [string, 'null']
+          format: uuid
+          description: Opcional si el flujo local aún no creó el comprobante.
+    VentaRetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/VentaDto'
+            - type: object
+              properties:
+                montoVueltoEfectivo:
+                  type: number
+                estadoComprobante:
+                  type: string
+                  description: Estado local; no implica respuesta de SUNAT.
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    PedidoMayoristaResponse:
+      type: object
+      x-status: proposed
+      examples:
+        - data:
+            ventaId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+            canalVenta: MAYORISTA
+            estado: BORRADOR
+            clienteId: 5a4b5c6d-7e8f-4012-9abc-def012345678
+            almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+            totalPagar: 200
+            detalles:
+              - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                cantidad: 20
+                precioUnitarioConIgv: 10
+                descuentoLinea: 0
+                totalLinea: 200
+            comprobanteId: null
+            creditoDisponiblePosterior: null
+            stockReservado: false
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/VentaDto'
+            - type: object
+              properties:
+                creditoDisponiblePosterior:
+                  type: [number, 'null']
+                stockReservado:
+                  type: boolean
+    VentaResumenDto:
+      type: object
+      required: [ventaId, canalVenta, estado, totalPagar]
+      properties:
+        ventaId:
+          type: string
+          format: uuid
+        canalVenta:
+          type: string
+        estado:
+          type: string
+        fechaCreacion:
+          type: string
+          format: date-time
+        totalPagar:
+          type: number
+    VentaPage:
+      type: object
+      examples:
+        - data:
+            - ventaId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+              canalVenta: MAYORISTA
+              estado: BORRADOR
+              fechaCreacion: '2026-10-22T16:00:00Z'
+              totalPagar: 200
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VentaResumenDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    VentaDetalleResponse:
+      type: object
+      examples:
+        - data:
+            ventaId: 6a4b5c6d-7e8f-4012-9abc-def012345678
+            canalVenta: MAYORISTA
+            estado: BORRADOR
+            clienteId: 5a4b5c6d-7e8f-4012-9abc-def012345678
+            almacenId: 3a4b5c6d-7e8f-4012-9abc-def012345678
+            totalPagar: 200
+            detalles:
+              - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+                cantidad: 20
+                precioUnitarioConIgv: 10
+                descuentoLinea: 0
+                totalLinea: 200
+            comprobanteId: null
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/VentaDto'
+    DetalleVentaPage:
+      type: object
+      examples:
+        - data:
+            - productoId: 5c6d7e8f-9012-4234-bcde-f01234567890
+              cantidad: 20
+              precioUnitarioConIgv: 10
+              descuentoLinea: 0
+              totalLinea: 200
+          pagination:
+            page: 1
+            pageSize: 20
+            totalItems: 1
+            totalPages: 1
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VentaItemDto'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    EmitirComprobantePagoComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#EmitirComprobantePagoComandoDto
+      x-pending: Contrastar la referencia a venta, series, notas y términos de pago con el modelo fiscal y las fuentes oficiales.
+      required: [ventaId, tipoComprobante, serie, fechaEmision, formaPago]
+      properties:
+        ventaId:
+          type: string
+          format: uuid
+        tipoComprobante:
+          type: string
+          enum: ['01', '03', '07', '08']
+        serie:
+          type: string
+        fechaEmision:
+          type: string
+          format: date
+        formaPago:
+          type: object
+          required: [tipo]
+          properties:
+            tipo:
+              type: string
+              enum: [Contado, Credito]
+            montoPendienteCredito:
+              type: number
+              exclusiveMinimum: 0
+            cuotas:
+              type: array
+              items:
+                type: object
+                required: [numeroCuota, montoCuota, fechaVencimiento]
+                properties:
+                  numeroCuota:
+                    type: integer
+                    minimum: 1
+                  montoCuota:
+                    type: number
+                    exclusiveMinimum: 0
+                  fechaVencimiento:
+                    type: string
+                    format: date
+          allOf:
+            - if:
+                properties:
+                  tipo:
+                    const: Credito
+                required: [tipo]
+              then:
+                required: [montoPendienteCredito, cuotas]
+          additionalProperties: false
+        documentoReferenciaModificado:
+          type: object
+          description: Requerido para nota de crédito o débito; catálogo y contenido a verificar.
+          required: [tipoDocumento, serieYNumero, codigoMotivoModificacion, glosaSustento]
+          properties:
+            tipoDocumento:
+              type: string
+              enum: ['01', '03']
+            serieYNumero:
+              type: string
+            codigoMotivoModificacion:
+              type: string
+            glosaSustento:
+              type: string
+          additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              tipoComprobante:
+                enum: ['07', '08']
+            required: [tipoComprobante]
+          then:
+            required: [documentoReferenciaModificado]
+      additionalProperties: false
+    ComprobanteSolicitudResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [documentoId, ventaId, estadoSolicitud, estadoTributario]
+          properties:
+            documentoId:
+              type: string
+              format: uuid
+            ventaId:
+              type: string
+              format: uuid
+            estadoSolicitud:
+              type: string
+              enum: [ACEPTADA_POR_API]
+            estadoTributario:
+              type: string
+              enum: [PENDIENTE_PROCESAMIENTO]
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    ComprobanteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [documentoId, ventaId, tipoComprobante, estadoLocal, estadoTributario]
+          properties:
+            documentoId:
+              type: string
+              format: uuid
+            ventaId:
+              type: string
+              format: uuid
+            tipoComprobante:
+              type: string
+            serie:
+              type: string
+            correlativo:
+              type: integer
+              minimum: 1
+            estadoLocal:
+              type: string
+              description: Estado del ciclo de aplicación; enum pendiente de consolidación.
+            estadoTributario:
+              type: string
+              enum: [PENDIENTE_PROCESAMIENTO, PENDIENTE_ENVIO, ENVIADO, ACEPTADO, ACEPTADO_CON_OBSERVACIONES, RECHAZADO, ERROR_TECNICO]
+            resultadoExterno:
+              oneOf:
+                - $ref: '#/components/schemas/SunatCdrRespuestaDto'
+                - type: 'null'
+              description: Ausente o null mientras no exista respuesta del servicio externo.
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+    SunatCdrRespuestaDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#SunatCdrRespuestaDto
+      required: [sunatResponseCode, sunatResponseDescription, observations]
+      properties:
+        documentReference:
+          type: object
+          properties:
+            documentTypeCode:
+              type: string
+            series:
+              type: string
+            correlative:
+              type: integer
+        sunatResponseCode:
+          type: string
+          description: Se copia literalmente si el servicio de emisión retorna el dato; no se inventan valores.
+        sunatResponseDescription:
+          type: string
+        cdrReceiptDate:
+          type: [string, 'null']
+          format: date-time
+        cdrHashValue:
+          type: [string, 'null']
+        observations:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+        isAccepted:
+          type: boolean
+          description: Interpretación del resultado recibido; valor no disponible antes de procesar respuesta.
+    IngestarSaldosLegadosComandoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#IngestarSaldosLegadosComandoDto
+      x-pending: Añadir identificador/origen de cada registro y resultado de conciliación; no usar firma ni token dentro del cuerpo salvo contrato de seguridad aprobado.
+      required: [fechaCorte, almacenDestinoCodigo, registros]
+      properties:
+        fechaCorte:
+          type: string
+          format: date
+        almacenDestinoCodigo:
+          type: string
+        registros:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [skuOrigen, cantidadFisica, costoUnitarioNetoSinIgv]
+            properties:
+              skuOrigen:
+                type: string
+              skuNuevo:
+                type: string
+              cantidadFisica:
+                type: number
+                minimum: 0
+              costoUnitarioNetoSinIgv:
+                type: number
+                minimum: 0
+              loteOrigen:
+                type: string
+              fechaVencimiento:
+                type: string
+                format: date
+          description: La procedencia y el identificador externo deben conservarse al importar.
+      additionalProperties: false
+    MigrationJobResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/TrabajoMigracionEstadoDto'
+    TrabajoMigracionEstadoDto:
+      type: object
+      x-source-dto: 03_DTOs_Schemas/dtos_schemas.md#TrabajoMigracionEstadoDto
+      required: [jobId, estado, totalRegistrosEnviados, registrosProcesadosExitosamente, registrosFallidos]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          enum: [PENDIENTE, PROCESANDO, CONCILIADO, FALLIDO]
+        tipoEntidad:
+          type: string
+        totalRegistrosEnviados:
+          type: integer
+          minimum: 0
+        registrosProcesadosExitosamente:
+          type: integer
+          minimum: 0
+        registrosFallidos:
+          type: integer
+          minimum: 0
+        resumenValorizadoTotalPEN:
+          type: number
+        erroresDetallados:
+          type: array
+          items:
+            type: object
+            properties:
+              lineaNumero:
+                type: integer
+              skuOrigen:
+                type: string
+              codigoError:
+                type: string
+              motivo:
+                type: string
+          description: Mensajes depurados; no incluir credenciales ni datos sensibles innecesarios.
