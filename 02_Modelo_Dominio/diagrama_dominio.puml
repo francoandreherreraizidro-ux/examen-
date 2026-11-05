@@ -1,250 +1,151 @@
 @startuml DiagramaDominioSistemaComercial
+title Modelo conceptual de dominio - Sistema comercial
+hide methods
 skinparam classAttributeIconSize 0
-skinparam monochrome false
-skinparam roundcorner 8
-skinparam shadowing true
+skinparam shadowing false
 skinparam packageStyle rectangle
+left to right direction
 
-title Modelo de Dominio - Sistema Comercial, Inventarios y Facturación UBL 2.1 SUNAT
+note top
+  Multiplicidades conceptuales sujetas a las decisiones pendientes
+  de modelo_dominio.md. Los elementos con <<opcional>> o
+  <<condicional>> no forman parte del nucleo confirmado.
+  Los atributos son conceptuales; las asociaciones expresan referencias.
+end note
 
-package "Módulo Catálogo" #F3E5F5 {
-    class Categoria {
-        +UUID id
-        +String codigo
-        +String nombre
-        +String descripcion
-        +Boolean activa
-    }
+package "Catalogo" {
+  class Producto {
+    +id: Identificador
+    +codigoInterno: Texto
+    +nombre: Texto
+    +descripcion: Texto
+    +unidadComercial: Codigo
+    +estado: EstadoProducto
+  }
 
-    class Producto {
-        +UUID id
-        +String sku
-        +String codigoBarras
-        +String nombre
-        +String unidadMedida
-        +String codigoSunat
-        +String afectacionIgvDefecto
-        +Boolean esPerecible
-        +Boolean activo
-    }
+  class Categoria <<opcional>> {
+    +id: Identificador
+    +nombre: Texto
+    +descripcion: Texto
+  }
 
-    class EscalaPrecio {
-        +UUID id
-        +String tipoEscala
-        +Decimal cantidadMinima
-        +Decimal precioUnitarioConIgv
-        +String moneda
-        +Date fechaInicio
-        +Date fechaFin
-    }
+  class Lote <<condicional>> {
+    +id: Identificador
+    +codigoLote: Texto
+    +fechaVencimiento: Fecha
+  }
 }
 
-package "Módulo Inventarios y Almacenes" #E1F5FE {
-    class Almacen {
-        +UUID id
-        +String codigo
-        +String nombre
-        +String codigoEstablecimientoSunat
-        +String direccionFisica
-        +Boolean esPuntoVentaRetail
-        +Boolean activo
-    }
+package "Inventario" {
+  class Almacen {
+    +id: Identificador
+    +codigo: Texto
+    +nombre: Texto
+    +estado: EstadoAlmacen
+  }
 
-    class StockAlmacen {
-        +UUID id
-        +Decimal cantidadFisica
-        +Decimal cantidadReservada
-        +Decimal cantidadDisponible
-        +Decimal costoPromedioPonderadoUnitario
-        +Timestamp ultimaActualizacion
-    }
-
-    class Lote {
-        +UUID id
-        +String codigoLote
-        +Date fechaFabricacion
-        +Date fechaVencimiento
-        +Decimal cantidadInicial
-        +Decimal cantidadRestante
-    }
-
-    class MovimientoInventario {
-        +UUID id
-        +Timestamp fechaHora
-        +String tipoOperacionSunat
-        +String documentoReferenciaTipo
-        +String documentoReferenciaNumero
-        +Decimal cantidadEntrada
-        +Decimal costoUnitarioEntrada
-        +Decimal cantidadSalida
-        +Decimal costoUnitarioSalida
-        +Decimal saldoCantidad
-        +Decimal saldoCostoUnitario
-        +Decimal saldoCostoTotal
-        +String motivoAjuste
-    }
+  class MovimientoInventario {
+    +id: Identificador
+    +tipo: TipoMovimiento
+    +cantidad: Cantidad
+    +unidad: Codigo
+    +fechaHoraEfectiva: FechaHora
+    +fechaHoraRegistro: FechaHora
+    +referenciaOrigen: Referencia
+  }
 }
 
-package "Módulo Abastecimiento" #FFF3E0 {
-    class Proveedor {
-        +UUID id
-        +String ruc
-        +String razonSocial
-        +String direccionFiscal
-        +String telefono
-        +String correoElectronico
-        +Boolean activo
-    }
+package "Terceros" {
+  class Proveedor {
+    +id: Identificador
+    +nombreORazonSocial: Texto
+    +identificadorComercial: Texto
+    +datosContacto: DatosContacto
+    +estado: EstadoTercero
+  }
 
-    class RecepcionMercaderia {
-        +UUID id
-        +String numeroRecepcion
-        +Timestamp fechaRecepcion
-        +String tipoDocumentoSustento
-        +String serieDocumentoSustento
-        +String numeroDocumentoSustento
-        +String estado
-    }
-
-    class DetalleRecepcion {
-        +UUID id
-        +Decimal cantidad
-        +Decimal costoUnitarioCompra
-        +Decimal costoTotalLinea
-    }
+  class Cliente {
+    +id: Identificador
+    +nombreORazonSocial: Texto
+    +identificadorComercial: Texto
+    +datosContacto: DatosContacto
+    +estado: EstadoTercero
+  }
 }
 
-package "Módulo Clientes y Seguridad" #E8F5E9 {
-    class Cliente {
-        +UUID id
-        +String tipoDocumentoIdentidad
-        +String numeroDocumento
-        +String nombreORazonSocial
-        +String direccionFiscal
-        +String correoElectronico
-        +String tipoCliente
-        +Decimal limiteCredito
-        +Integer plazoCreditoDias
-        +Boolean estaBloqueadoPorMora
-    }
+package "Ventas" {
+  class Venta {
+    +id: Identificador
+    +fechaHora: FechaHora
+    +estado: EstadoVenta
+    +moneda: Codigo
+    +total: Importe
+    +referenciaOrigen: Referencia
+  }
 
-    class Usuario {
-        +UUID id
-        +String nombreUsuario
-        +String nombres
-        +String apellidos
-        +String rol
-        +Boolean activo
-    }
+  class DetalleVenta {
+    +id: Identificador
+    +numeroLinea: Entero
+    +cantidad: Cantidad
+    +precioUnitario: Importe
+    +descuento: Importe
+    +importeLinea: Importe
+    +descripcionAlMomento: Texto
+  }
 }
 
-package "Módulo Ventas Comerciales" #FFFDE7 {
-    class Venta {
-        +UUID id
-        +String canalVenta
-        +String estado
-        +String condicionPago
-        +String moneda
-        +Decimal tipoCambio
-        +Decimal subtotalGravado
-        +Decimal subtotalExonerado
-        +Decimal subtotalInafecto
-        +Decimal totalIgv
-        +Decimal totalIcbper
-        +Decimal totalDescuentos
-        +Decimal totalPagar
-        +Timestamp fechaCreacion
-        +Timestamp fechaConfirmacion
-    }
-
-    class DetalleVenta {
-        +UUID id
-        +Integer numeroItem
-        +Decimal cantidad
-        +Decimal precioUnitarioConIgv
-        +Decimal valorUnitarioSinIgv
-        +String codigoAfectacionIgv
-        +Decimal montoIgvLinea
-        +Decimal descuentoLinea
-        +Decimal totalLinea
-    }
-
-    class CuotaCredito {
-        +UUID id
-        +Integer numeroCuota
-        +Decimal montoCuota
-        +Date fechaVencimiento
-    }
+package "Comprobantes" {
+  class ComprobanteElectronico {
+    +id: Identificador
+    +tipoDocumento: Codigo
+    +identificadorDocumento: Texto
+    +fechaEmision: FechaHora
+    +estadoEmision: EstadoEmision
+    +referenciaExterna: Texto
+    +huellaDocumento: Texto
+  }
 }
 
-package "Módulo Tributario (SUNAT UBL 2.1)" #FFEBEE {
-    class ComprobanteElectronico {
-        +UUID id
-        +String tipoComprobante
-        +String serie
-        +Integer correlativo
-        +Date fechaEmision
-        +Time horaEmision
-        +String estado
-        +String digestValue
-        +String signatureValue
-        +Binary xmlFirmado
-        +Binary cdrZip
-        +String codigoRespuestaSunat
-        +String glosaRespuestaSunat
-    }
+package "Abastecimiento opcional" {
+  class Recepcion <<opcional>> {
+    +id: Identificador
+    +fechaHora: FechaHora
+    +estado: EstadoRecepcion
+  }
 
-    class DetalleComprobante {
-        +UUID id
-        +Integer numeroLinea
-        +String codigoProducto
-        +String descripcion
-        +String unidadMedida
-        +Decimal cantidad
-        +Decimal precioComercialUnitario
-        +Decimal valorUnitario
-        +String codigoAfectacionIgv
-        +Decimal montoIgv
-        +Decimal totalLinea
-    }
+  class DetalleRecepcion <<opcional>> {
+    +id: Identificador
+    +cantidad: Cantidad
+    +costoUnitario: Importe
+  }
 }
 
-' Relaciones de Catálogo
-Categoria "1" --> "0..*" Producto : clasifica
-Producto "1" *-- "1..*" EscalaPrecio : define precios en
+package "Auditoria opcional" {
+  class Usuario <<opcional>> {
+    +id: Identificador
+    +nombreVisible: Texto
+    +estado: EstadoUsuario
+  }
+}
 
-' Relaciones de Inventario
-Almacen "1" *-- "0..*" StockAlmacen : custodia
-Producto "1" --> "0..*" StockAlmacen : cuantificado en
-Producto "1" --> "0..*" Lote : controla caducidad de
-Almacen "1" --> "0..*" Lote : ubica
-Almacen "1" --> "0..*" MovimientoInventario : registra movimientos en
-Producto "1" --> "0..*" MovimientoInventario : afectado por
-Lote "0..1" --> "0..*" MovimientoInventario : rastreado en
+Categoria "0..1" --> "0..*" Producto : clasifica
+Producto "1" <-- "0..*" MovimientoInventario : afecta a
+Almacen "1" <-- "0..*" MovimientoInventario : registrado en
+Cliente "0..1" <-- "0..*" Venta : cliente identificado
+Venta "1" *-- "1..*" DetalleVenta : contiene al confirmar
+Producto "1" <-- "0..*" DetalleVenta : vendido en
+Venta "0..1" <-- "0..*" ComprobanteElectronico : origen comercial
+Venta "0..1" <-- "0..*" MovimientoInventario : origen de salida
 
-' Relaciones de Abastecimiento
-Proveedor "1" --> "0..*" RecepcionMercaderia : provee
-Almacen "1" <-- RecepcionMercaderia : ingresa a
-RecepcionMercaderia "1" *-- "1..*" DetalleRecepcion : desglosa
-DetalleRecepcion --> "1" Producto : referencia
-DetalleRecepcion --> "0..1" Lote : asigna lote a
+Proveedor "0..1" <-- "0..*" Recepcion : proveedor si aplica
+Almacen "1" <-- "0..*" Recepcion : destino
+Recepcion "1" *-- "1..*" DetalleRecepcion : contiene al confirmar
+Producto "1" <-- "0..*" DetalleRecepcion : recibido
+Recepcion "0..1" <-- "0..*" MovimientoInventario : origen de ingreso
+Producto "1" *-- "0..*" Lote : identifica partidas
+Lote "0..1" <-- "0..*" MovimientoInventario : trazado por lote
 
-' Relaciones Comerciales
-Cliente "1" --> "0..*" Venta : realiza
-Almacen "1" <-- Venta : despacha
-Venta "1" *-- "1..*" DetalleVenta : contiene
-DetalleVenta --> "1" Producto : comercializa
-DetalleVenta --> "0..1" Lote : descuenta
-Venta "1" *-- "0..*" CuotaCredito : calendariza pago
-
-' Relaciones Tributarias (Desacopladas)
-Venta "1" ..> "0..*" ComprobanteElectronico : sustenta
-ComprobanteElectronico "1" *-- "1..*" DetalleComprobante : detalla
-ComprobanteElectronico "0..1" <-- "0..*" ComprobanteElectronico : rectifica (Nota)
-
-' Auditoría y Trazabilidad de Usuario
-Usuario "1" --> "0..*" Venta : registra
-Usuario "1" --> "0..*" RecepcionMercaderia : recepciona
-Usuario "1" --> "0..*" MovimientoInventario : asienta
-
+Usuario "0..1" <-- "0..*" Venta : registrado por
+Usuario "0..1" <-- "0..*" MovimientoInventario : registrado por
+Usuario "0..1" <-- "0..*" Recepcion : registrado por
 @enduml

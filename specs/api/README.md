@@ -6,11 +6,13 @@ This directory contains contracts, schema definitions, and endpoint documentatio
 
 ## Current API Contract
 
-- [`sistema-comercial.openapi.yaml`](./sistema-comercial.openapi.yaml) is the OpenAPI 3.1 **DRAFT** for the commercial-system API.
-- Its companion endpoint guide, traceability matrix, and validation notes are in [`05_Contratos_API/especificacion_contratos_api.md`](../../05_Contratos_API/especificacion_contratos_api.md).
+- [`sistema-comercial.openapi.yaml`](./sistema-comercial.openapi.yaml) is the OpenAPI 3.1 **DRAFT** for the commercial-system API. It references the preliminary DTO definitions in [`03_DTOs_Schemas/dto-contracts.schema.json`](../../03_DTOs_Schemas/dto-contracts.schema.json).
+- Its endpoint guide, requirement coverage, and open decisions are in [`05_Contratos_API/especificacion_contratos_api.md`](../../05_Contratos_API/especificacion_contratos_api.md).
 - The parent feature, `SPEC-002`, remains `DRAFT`. This contract is a proposal for review, not approval for implementation.
-- `x-status`, `x-pending`, and `x-requirements` extensions mark proposals, unresolved dependencies, and traceability in the YAML.
-- Existing DTOs are referenced where possible. A schema identified as proposed is not an approved DTO and must be reconciled with the domain model before contract approval.
+- `x-status` and `x-requirements` extensions mark proposals and requirement traceability in the YAML.
+- Paths and HTTP operations are proposed. In particular, descriptive `PATCH` operations, `POST /ventas/{ventaId}/confirmar`, and the `Idempotency-Key` header are proposals, not approved behavior. A schema reference does not mean the DTO or API is approved; reconcile them with the current domain model and requirements before approval.
+- The generic inventory-movement operation must not be used to duplicate a sale's inventory effect; the approved movement types/origins and atomicity policy remain undecided.
+- The migration contract, authentication, full resource lifecycle, inventory rules, and official SUNAT-specific data remain pending.
 
 ## 📁 Recommended Organization
 

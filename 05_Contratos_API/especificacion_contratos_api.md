@@ -1,162 +1,175 @@
-# Contratos de API del sistema comercial
+# Contrato API — Sistema comercial
 
 | Metadato | Detalle |
 |---|---|
-| Entregable | Especificación de endpoints y servicios mediante contratos API |
-| OpenAPI | [`specs/api/sistema-comercial.openapi.yaml`](../specs/api/sistema-comercial.openapi.yaml) |
-| Especificación funcional base | [`specs/features/002-sistema-comercial-facturacion.md`](../specs/features/002-sistema-comercial-facturacion.md) |
-| Versión del contrato | `0.1.0` |
-| Estado | `DRAFT - PROPUESTA PARA VALIDACIÓN` |
-| Base de rutas | `/api/v1` |
-| Host de producción | Pendiente; no se fija una URL de producción |
+| Contract ID | `API-SISTEMA-COMERCIAL` |
+| Estado | `DRAFT` — propuesta para revisión, no aprobada para implementación |
+| Versión | `0.1.0` |
+| Base de rutas propuesta | `/api/v1` |
+| Contrato OpenAPI | [sistema-comercial.openapi.yaml](../specs/api/sistema-comercial.openapi.yaml) |
+| Especificación de DTOs | [dtos_schemas.md](../03_DTOs_Schemas/dtos_schemas.md) |
+| Fuente principal | [análisis de requisitos](../01_Analisis_Requisitos/analisis_requisitos.md) |
+| Modelo conceptual | [modelo de dominio](../02_Modelo_Dominio/modelo_dominio.md) |
 
-> **Límite de aprobación:** SPEC-002 continúa en `DRAFT`; el análisis de requisitos también mantiene asuntos abiertos y los documentos de dominio/DTO no están consolidados. Este documento y el OpenAPI son una propuesta para revisión, no una autorización de implementación ni una afirmación de cumplimiento tributario. Las ampliaciones de DTO y operaciones se señalan como propuestas o pendientes.
+> **Estado Spec-First:** `SPEC-002` sigue en `DRAFT`. Este contrato es una propuesta para revisar; no autoriza crear controladores o servicios y no afirma cumplimiento normativo ni integración productiva con SUNAT.
 
-## 1. Fuentes y criterios de diseño
+## 1. Alcance y fuentes
 
-Se revisaron las instrucciones del repositorio (`AGENTS.md`), el flujo Spec-First descrito en `README.md` y `specs/README.md`, los requisitos, el modelo, los DTOs/Schemas, la arquitectura, los ADRs y el contrato API previo.
+El contrato cubre de forma preliminar las capacidades de gestión de productos, almacenes, terceros, movimientos de inventario y ventas, además de la solicitud y consulta del estado de comprobantes. Se conservan los códigos del análisis vigente: `RF-PRO-001`, `RF-INV-001` a `RF-INV-002`, `RF-COM-001`, `RF-VEN-001` a `RF-VEN-002`, `RF-CPE-001`, `RF-SUN-001`, `RF-MIG-001`, `RF-VAL-001` y `RF-TRZ-001`.
 
-Fuentes del dominio disponibles:
+Las rutas para comprobantes son propuestas por la asociación inferida entre venta y documento (`RF-VEN-002`). Los identificadores de otros documentos/versiones no se trasladan como requisitos.
 
-- [`01_Analisis_Requisitos/analisis_requisitos.md`](../01_Analisis_Requisitos/analisis_requisitos.md): identificadores RF/RNF/RN, clasificaciones de certeza y preguntas aún abiertas.
-- [`02_Modelo_Dominio/modelo_dominio.md`](../02_Modelo_Dominio/modelo_dominio.md): modelo conceptual en español, relaciones e invariantes declaradas.
-- [`03_DTOs_Schemas/dtos_schemas.md`](../03_DTOs_Schemas/dtos_schemas.md): DTOs y algunos schemas de entrada/salida.
-- [`04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md`](../04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md), [`ADR-0002`](../specs/architecture/adrs/0002-arquitectura-hexagonal-mvc.md) y [`ADR-0003`](../specs/architecture/adrs/0003-persistencia-postgresql-kardex.md): responsabilidades MVC/hexagonales, puertos y PostgreSQL.
+El contrato OpenAPI es el detalle normativo de rutas, parámetros, cuerpos y respuestas; los DTOs se referencian desde [dto-contracts.schema.json](../03_DTOs_Schemas/dto-contracts.schema.json). La especificación OpenAPI 3.1 permite referencias externas; confirmar su resolución en la herramienta de documentación/validación que se elija.
 
-El contrato usa DTOs de frontera y proyecciones de respuesta, no expone tablas ni entidades de persistencia. Los servicios indicados son puertos/casos de uso candidatos de la arquitectura; sus firmas no están aprobadas.
+## 2. Convenciones de API propuestas
 
-## 2. Convenciones generales propuestas
-
-- JSON para solicitudes y respuestas; OpenAPI 3.1 y ruta versionada `/api/v1`.
-- Respuestas exitosas envueltas en `data`; las listas incluyen `pagination`.
-- Errores con `application/problem+json`, siguiendo Problem Details. `code` e `invalidParams` son extensiones de aplicación.
-- Autenticación bearer JWT por RNF-SEC-002. Emisor, audiencia, claims, scopes y asociación de roles a cada operación están pendientes; no se inventan roles de API.
-- Las operaciones de escritura usan `Idempotency-Key`. El contrato propone detectar reutilización de clave con un payload distinto como `409`; duración de retención y tratamiento definitivo de replay requieren aprobación.
-- `409` identifica conflictos de estado/concurrencia; `422` una regla de negocio no satisfecha; `404` un recurso no existente; `400` un payload inválido; `401/403` fallos de autenticación/autorización. No se fijan códigos SUNAT.
-- La escritura de venta y sus cambios de inventario debe ser atómica (RF-TRZ-002, RNF-DAT-001). El balance y el Kardex no se aceptan desde el cliente.
-- El precio final, descuentos permitidos, impuestos y totales son calculados o validados por el servidor. No se acepta un total enviado por el consumidor.
-- `202 Accepted` solo indica que la API recibió y registró una solicitud asíncrona; no implica envío, aceptación ni conformidad de SUNAT/OSE.
-
-## 3. Catálogo de operaciones
-
-Los identificadores, schemas normativos del borrador, parámetros completos, ejemplos y respuestas están en el archivo OpenAPI vinculado arriba. El cuadro resume el propósito y la dependencia de cada operación.
-
-| ID / operación | Propósito y RF | DTO de entrada/salida y entidades principales | Puerto / componente responsable |
-|---|---|---|---|
-| `listarCategorias` — `GET /api/v1/catalog/categories` | Consultar categorías. RF-CAT-001. | Proyección `CategoriaResumenDto` propuesta; `Categoria`. | `CatalogQueryPort` propuesto; controlador MVC de catálogo. |
-| `crearProducto` — `POST /api/v1/catalog/products` | Registrar catálogo y precios. RF-CAT-001/002/003/004. | `CrearProductoComandoDto`, `ProductoResumenDto`; `Producto`, `Categoria`, `EscalaPrecio`. | `ProductCatalogCommandPort` propuesto; controlador de catálogo. |
-| `listarProductos` — `GET /api/v1/catalog/products` | Filtrar y paginar el catálogo. RF-CAT-001. | `ProductoResumenDto`; `Producto`, `EscalaPrecio`. | `ProductCatalogQueryPort` propuesto. |
-| `obtenerProducto` — `GET /api/v1/catalog/products/{productId}` | Consultar producto. RF-CAT-001. | Proyección de producto; `Producto`, `Categoria`, `EscalaPrecio`. | `ProductCatalogQueryPort` propuesto. |
-| `actualizarProducto` — `PATCH /api/v1/catalog/products/{productId}` | Actualizar campos permitidos; excluir SKU/historial. RF-CAT-001/002. **Propuesta.** | `ActualizarProductoComandoDto` propuesto; `Producto`. | `ProductCatalogCommandPort` propuesto. |
-| `registrarCambioEscalaPrecio` — `POST /api/v1/catalog/price-tiers` | Registrar vigencia de precio con motivo/auditoría. RF-CAT-002, RF-TRZ-003. **Propuesta.** | Entrada: `ActualizarEscalaPrecioComandoDto`; salida `EscalaPrecioResponse` propuesta. `Producto`, `EscalaPrecio`, `Usuario`. | `ProductCatalogCommandPort` propuesto. |
-| `listarAlmacenes` — `GET /api/v1/inventory/warehouses` | Consultar almacenes. RF-ALM-001. | `AlmacenResumenDto` propuesto; `Almacen`. | `WarehouseQueryPort` propuesto. |
-| `consultarExistencias` — `GET /api/v1/inventory/stocks` | Consultar saldo físico, reservado y disponible. RF-ALM-001/002. | `StockDisponibilidadDto`; `StockAlmacen`, `Producto`, `Almacen`. | `StockQueryPort` propuesto. |
-| `registrarRecepcion` — `POST /api/v1/inventory/receipts` | Registrar entrada y afectar stock/Kardex atómicamente. RF-ALM-003/002, RF-TRZ-002. | `RegistrarEntradaMercaderiaComandoDto`; `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario`, `StockAlmacen`, `Lote`. | `StockManagementServicePort`; controlador MVC de inventario. |
-| `listarRecepciones` — `GET /api/v1/inventory/receipts` | Consultar recepciones por filtros. RF-ALM-003. | `RecepcionResumenDto` propuesto; `RecepcionMercaderia`. | `StockQueryPort` propuesto. |
-| `obtenerRecepcion` — `GET /api/v1/inventory/receipts/{receiptId}` | Consultar recepción y líneas. RF-ALM-003, RF-TRZ-001. | Proyección de recepción propuesta; `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario`. | `StockQueryPort` propuesto. |
-| `listarMovimientosInventario` — `GET /api/v1/inventory/movements` | Consultar Kardex/movimientos, sin alterar el historial. RF-ALM-002/004, RF-TRZ-001. | Proyección de movimiento propuesta; `MovimientoInventario`, `Producto`, `Almacen`, `Lote`. | `StockQueryPort` propuesto. |
-| `listarLotes` — `GET /api/v1/inventory/lots` | Consultar lotes/vencimientos si se confirma este alcance. RF-CAT-004. **Pendiente de confirmación.** | Proyección de lote propuesta; `Lote`, `Producto`, `Almacen`. | `LotQueryPort` propuesto. |
-| `registrarTransferencia` — `POST /api/v1/inventory/transfers` | Iniciar traslado. RF-ALM-005/002. **Propuesta; falta contrato de recepción/discrepancias.** | `TransferirStockInteralmacenComandoDto`; `Almacen`, `StockAlmacen`, `MovimientoInventario`, `Lote`. | `StockManagementServicePort`; adaptador MVC de inventario. |
-| `registrarAjusteInventario` — `POST /api/v1/inventory/adjustments` | Registrar ajuste justificado y autorizado. RF-ALM-006/002, RF-TRZ-003. **Propuesta.** | `RegistrarAjusteInventarioComandoDto`; `StockAlmacen`, `MovimientoInventario`, `Usuario`. | `StockManagementServicePort`; adaptador MVC de inventario. |
-| `registrarCliente` — `POST /api/v1/directory/customers` | Registrar cliente y perfil comercial. RF-DIR-001/003. | `RegistrarClienteComandoDto`; `Cliente`. | `CustomerDirectoryCommandPort` propuesto. |
-| `listarClientes` — `GET /api/v1/directory/customers` | Buscar clientes con filtros/paginación. RF-DIR-001. | `ClienteResumenDto` propuesto; `Cliente`. | `CustomerDirectoryQueryPort` propuesto. |
-| `obtenerCliente` — `GET /api/v1/directory/customers/{customerId}` | Consultar cliente. RF-DIR-001. | Proyección de cliente propuesta; `Cliente`. | `CustomerDirectoryQueryPort` propuesto. |
-| `actualizarCliente` — `PATCH /api/v1/directory/customers/{customerId}` | Actualizar campos permitidos. RF-DIR-001/003. **Propuesta.** | `ActualizarClienteComandoDto` propuesto; `Cliente`. | `CustomerDirectoryCommandPort` propuesto. |
-| `registrarProveedor` — `POST /api/v1/directory/suppliers` | Registrar proveedor. RF-DIR-002. **Propuesta porque no hay DTO aprobado.** | `RegistrarProveedorComandoDto` propuesto; `Proveedor`. | `SupplierDirectoryCommandPort` propuesto. |
-| `listarProveedores` — `GET /api/v1/directory/suppliers` | Buscar proveedores. RF-DIR-002. | `ProveedorResumenDto` propuesto; `Proveedor`. | `SupplierDirectoryQueryPort` propuesto. |
-| `obtenerProveedor` — `GET /api/v1/directory/suppliers/{supplierId}` | Consultar proveedor. RF-DIR-002. | Proyección de proveedor propuesta; `Proveedor`. | `SupplierDirectoryQueryPort` propuesto. |
-| `registrarVentaRetail` — `POST /api/v1/sales/pos` | Venta minorista, detalle y stock atómicos. RF-VEN-001/003, RF-ALM-004, RF-TRZ-002, RNF-DAT-001. | `CrearVentaRetailPosComandoDto`, `VentaRetailResultadoDto`; `Venta`, `DetalleVenta`, `Cliente`, `Producto`, `StockAlmacen`, `MovimientoInventario`. | `SaleOrderServicePort`; controlador POS MVC. |
-| `registrarPedidoMayorista` — `POST /api/v1/sales/wholesale/orders` | Crear pedido y líneas; no confirma ni reserva por sí solo. RF-VEN-002. | `CrearPedidoMayoristaComandoDto`; `Venta`, `DetalleVenta`, `Cliente`. | `SaleOrderServicePort`; controlador mayorista MVC. |
-| `confirmarPedidoMayorista` — `POST /api/v1/sales/wholesale/orders/{saleId}/confirm` | Confirmar después de validar crédito y stock, aplicando la reserva atómicamente. RF-VEN-002, RF-DIR-003, RF-ALM-004, RF-TRZ-002. **Propuesta.** | Resultado propuesto; `Venta`, `Cliente`, `StockAlmacen`, `CuotaCredito`. | `SaleOrderServicePort`; controlador mayorista MVC. |
-| `listarVentas` — `GET /api/v1/sales` | Listar ventas/pedidos por filtros. RF-VEN-001/002. | `VentaResumenDto` propuesto; `Venta`, `Cliente`. | `SaleOrderQueryPort` propuesto. |
-| `obtenerVenta` — `GET /api/v1/sales/{saleId}` | Consultar venta y referencias de trazabilidad. RF-VEN-001/002, RF-TRZ-001. | `VentaDetalleDto` propuesto; `Venta`, `DetalleVenta`, `Cliente`, `MovimientoInventario`, `ComprobanteElectronico`. | `SaleOrderQueryPort` propuesto. |
-| `listarDetallesVenta` — `GET /api/v1/sales/{saleId}/details` | Consultar líneas de venta. RF-VEN-001/002, RF-TRZ-001. | `DetalleVentaDto` propuesto; `Venta`, `DetalleVenta`, `Producto`, `Lote`. | `SaleOrderQueryPort` propuesto. |
-| `solicitarEmisionComprobante` — `POST /api/v1/billing/documents` | Registrar solicitud de emisión asociada a una venta. RF-CPE-001/002/003, RF-SUN-001/002/004/005. | `EmitirComprobantePagoComandoDto`; respuesta de solicitud propuesta; `Venta`, `ComprobanteElectronico`, `DetalleComprobante`, `CuotaCredito`. | `ElectronicInvoicingServicePort`; controlador de facturación MVC y Outbox. |
-| `obtenerComprobante` — `GET /api/v1/billing/documents/{documentId}` | Consultar estado local y resultado externo disponible. RF-SUN-002/004, RF-TRZ-001. | `SunatCdrRespuestaDto` opcional y proyección de estado propuesta; `ComprobanteElectronico`. | `ElectronicInvoicingQueryPort` propuesto. |
-| `solicitarReintentoComprobante` — `POST /api/v1/billing/documents/{documentId}/retry` | Reintentar procesamiento existente sin duplicar documento. RF-SUN-004/005, RNF-REL-002. **Propuesta.** | Resultado de reintento propuesto; `ComprobanteElectronico`. | `ElectronicInvoicingServicePort`; worker/Outbox secundario. |
-| `iniciarCargaSaldosIniciales` — `POST /api/v1/migration/jobs/stock-balances` | Encolar carga de apertura. RF-MIG-002, RF-TRZ-001. | `IngestarSaldosLegadosComandoDto`, `TrabajoMigracionEstadoDto`; `MovimientoInventario`, `StockAlmacen`. | `DataMigrationServicePort`; adaptador de migración. |
-| `obtenerEstadoTrabajoMigracion` — `GET /api/v1/migration/jobs/{jobId}` | Consultar estado, errores y conciliación. RF-MIG-001/002/003. | `TrabajoMigracionEstadoDto`; `MigrationBatch` (modelo táctico pendiente de conciliación con modelo español). | `DataMigrationServicePort`; adaptador de migración. |
-
-## 4. Contratos y estados relevantes
-
-### Ventas e inventario
-
-- Las líneas llevan producto y cantidad; los totales son proyecciones calculadas por el servidor. Los precios del DTO POS existente requieren decisión explícita: aplicar lista de precios vigente o validar precio pactado.
-- La transacción de venta/stock/Kardex debe ser indivisible. Si no hay stock o existe conflicto concurrente, se rechaza y no se deja una venta parcialmente confirmada. No se permite sobregiro hasta resolver el conflicto entre RF-ALM-004 y RN-05.
-- El DTO de venta mayorista actual no incluye el calendario de cuotas que aparece en requisitos y comprobantes; debe reconciliarse.
-- El control de lote y la selección de lote al despachar solo aplican tras confirmar el alcance del RF-CAT-004 y resolver RN-PEND-02.
-
-### Emisión tributaria
-
-El contrato separa el resultado de la solicitud local (`202`, solicitud registrada) del ciclo externo. La consulta posterior puede indicar estado local pendiente/enviado y, únicamente si fue recibida, la respuesta externa y sus observaciones. No se define código de rechazo SUNAT ni se declara aceptación por el solo hecho de recibir `202`.
-
-### Idempotencia y concurrencia
-
-El mismo `Idempotency-Key` y payload debe evitar duplicar venta, recepción, movimiento o comprobante. Una clave reutilizada con otro payload debe ser conflicto. La política de retención y si un replay repite exactamente el status/response original están pendientes de aprobación. Para el inventario, la operación de aplicación debe proteger la lectura/cambio de stock bajo control transaccional acorde con RNF-DAT-001.
-
-## 5. Errores comunes
-
-| HTTP | Uso propuesto | Código de aplicación |
+| Tema | Contrato preliminar | Pendiente |
 |---|---|---|
-| `400` | JSON mal formado o schema inválido | `INVALID_PAYLOAD` |
-| `401` | Token faltante o inválido | `UNAUTHORIZED` |
-| `403` | Identidad autenticada sin permiso | `FORBIDDEN` |
-| `404` | Producto, cliente, proveedor, venta, documento o trabajo inexistente | `NOT_FOUND` |
-| `409` | Clave idempotente incompatible, duplicado, transición inválida o conflicto de concurrencia | `CONFLICT` |
-| `422` | Regla de negocio, crédito, stock o consistencia incumplida | `BUSINESS_RULE_VIOLATION` |
-| `500` | Error inesperado; respuesta no debe exponer detalles internos | `INTERNAL_SERVER_ERROR` |
+| Protocolo y formato | HTTP con JSON; respuestas de error `application/problem+json`. | Confirmar consumo REST/HTTP como interfaz deseada. |
+| Métodos de escritura | `POST` crea recursos o ejecuta transiciones; `PATCH` actualiza parcialmente atributos descriptivos; no se ofrece `PUT` ni borrado físico. | Confirmar qué recursos pueden editarse/desactivarse y si deben exponerse estas operaciones. |
+| Versionado | Prefijo `/api/v1`. | Política de cambios incompatibles y versionado. |
+| Nombres de rutas | Recursos en español y plural. | Aprobación de nomenclatura y compatibilidad con interfaces consumidoras. |
+| Identificadores | UUID en rutas y DTOs actuales. | Confirmar estrategia de identidad común. |
+| Paginación | `pagina` (desde 1) y `tamanoPagina` (1–100, default 20). | Límites, orden estable, conteo total y filtros. |
+| Respuesta de listas | `{ elementos, paginacion }`. | Aprobar sobrecarga/costo del campo `totalElementos`. |
+| Errores | Perfil de Problem Details con `code` e `invalidParams` opcionales. | Confirmar catálogo de errores y correlación de solicitudes. |
+| Autenticación | OpenAPI no exige un esquema todavía. | Decidir proveedor, mecanismo, identidad, permisos y protección de datos. |
+| Idempotencia | `Idempotency-Key` obligatorio en escrituras del borrador; clave y contenido iguales reproducen el resultado anterior, contenido distinto da `409`. | Propuesta; aprobar obligatoriedad, alcance, vigencia y almacenamiento/replay atómico. La clave no va dentro de los DTOs. |
+| Integración SUNAT | Solo se modela consulta del estado local y resultado disponible. | Modalidad, protocolo, autenticación, ambiente y contrato externo requieren fuentes oficiales y decisión empresarial. |
 
-`ERR_INSUFFICIENT_STOCK` y `ERR_CREDIT_LIMIT_EXCEEDED` aparecen en documentos del dominio como candidatos; sus nombres y mapping definitivo de HTTP deben aprobarse con los requisitos. No se consideran códigos SUNAT.
+No se fijan URLs de entorno. La API de negocio no expone directamente operaciones SOAP de SUNAT ni convierte el nombre de una operación externa en endpoint público.
 
-## 6. Matriz resumida de trazabilidad
+## 3. Operaciones propuestas
 
-La matriz por operación está en §3. No hay operación definida sin RF asociado. El estado “propuesto” significa que el requisito existe, pero faltan DTO, decisión, validación de reglas o aprobación del stakeholder.
+`Propuesta` significa que el análisis pide la capacidad general, pero no especifica ese método HTTP, sus filtros o su respuesta completa. La ruta equivalente aparece en el OpenAPI y usa su `operationId`.
 
-| Grupo | RF/RNF | DTO(s) existentes | Entidades | Componente arquitectónico |
+| Método y ruta | Operación | RF | Entrada / salida principal | Estado |
 |---|---|---|---|---|
-| Catálogo | RF-CAT-001/002/003/004 | `CrearProductoComandoDto`, `ProductoResumenDto` | `Producto`, `Categoria`, `EscalaPrecio` | Controlador MVC → puerto de catálogo → PostgreSQL adapter |
-| Inventario | RF-ALM-001/002/003/004/005/006, RF-TRZ-001/002/003, RNF-DAT-001 | `RegistrarEntradaMercaderiaComandoDto`, `TransferirStockInteralmacenComandoDto`, `RegistrarAjusteInventarioComandoDto`, `StockDisponibilidadDto` | `Almacen`, `StockAlmacen`, `Lote`, `RecepcionMercaderia`, `DetalleRecepcion`, `MovimientoInventario` | Controlador MVC → `StockManagementServicePort` → repositorios PostgreSQL |
-| Directorio | RF-DIR-001/002/003 | `RegistrarClienteComandoDto` | `Cliente`, `Proveedor` | Controlador MVC → puertos de directorio → repositorios |
-| Ventas | RF-VEN-001/002/003, RF-ALM-004, RF-TRZ-002/003, RNF-DAT-001 | `CrearVentaRetailPosComandoDto`, `CrearPedidoMayoristaComandoDto`, `VentaRetailResultadoDto` | `Venta`, `DetalleVenta`, `CuotaCredito`, `StockAlmacen`, `MovimientoInventario` | Controladores POS/mayorista → `SaleOrderServicePort` → dominio y adaptadores |
-| Comprobantes | RF-CPE-001/002/003, RF-SUN-001/002/004/005, RF-TRZ-001, RNF-REL-002 | `EmitirComprobantePagoComandoDto`, `SunatCdrRespuestaDto` | `ComprobanteElectronico`, `DetalleComprobante`, `Venta` | Controlador MVC → `ElectronicInvoicingServicePort`; Outbox worker, signer y gateway como adaptadores |
-| Migración | RF-MIG-001/002/003, RF-TRZ-001 | `IngestarSaldosLegadosComandoDto`, `TrabajoMigracionEstadoDto` | `MovimientoInventario`, `StockAlmacen`, `MigrationBatch` | CLI/API de migración → `DataMigrationServicePort` → adaptador PostgreSQL/archivo |
+| `GET /api/v1/productos` | `listarProductos` | `RF-PRO-001` | filtros/paginación → `ProductosPage` | Propuesta |
+| `POST /api/v1/productos` | `crearProducto` | `RF-PRO-001` | `CrearProductoDto` → `ProductoDto` | Propuesta |
+| `GET /api/v1/productos/{productoId}` | `obtenerProducto` | `RF-PRO-001` | UUID → `ProductoDto` | Propuesta |
+| `PATCH /api/v1/productos/{productoId}` | `actualizarProducto` | `RF-PRO-001` | `ActualizarProductoDto` → `ProductoDto` | Propuesta |
+| `GET /api/v1/almacenes` | `listarAlmacenes` | `RF-INV-001` | paginación → `AlmacenesPage` | Propuesta |
+| `POST /api/v1/almacenes` | `crearAlmacen` | `RF-INV-001` | `CrearAlmacenDto` → `AlmacenDto` | Propuesta; operación de escritura marcada como tal en OpenAPI |
+| `GET /api/v1/almacenes/{almacenId}` | `obtenerAlmacen` | `RF-INV-001` | UUID → `AlmacenDto` | Propuesta |
+| `PATCH /api/v1/almacenes/{almacenId}` | `actualizarAlmacen` | `RF-INV-001` | `ActualizarAlmacenDto` → `AlmacenDto` | Propuesta |
+| `GET /api/v1/inventario/movimientos` | `listarMovimientosInventario` | `RF-INV-002`, `RF-TRZ-001` | filtros/paginación → `MovimientosPage` | Propuesta |
+| `POST /api/v1/inventario/movimientos` | `registrarMovimientoInventario` | `RF-INV-002`, `RF-VAL-001` | `RegistrarMovimientoInventarioDto` → `MovimientoInventarioDto` | Propuesta; tipos/orígenes pendientes para evitar duplicar ventas |
+| `GET /api/v1/inventario/movimientos/{movimientoId}` | `obtenerMovimientoInventario` | `RF-INV-002`, `RF-TRZ-001` | UUID → `MovimientoInventarioDto` | Propuesta |
+| `GET /api/v1/clientes` | `listarClientes` | `RF-COM-001` | filtros/paginación → `TercerosPage` | Propuesta |
+| `POST /api/v1/clientes` | `crearCliente` | `RF-COM-001` | `CrearClienteDto` → `TerceroDto` | Propuesta |
+| `GET /api/v1/clientes/{clienteId}` | `obtenerCliente` | `RF-COM-001` | UUID → `TerceroDto` | Propuesta |
+| `PATCH /api/v1/clientes/{clienteId}` | `actualizarCliente` | `RF-COM-001` | `ActualizarTerceroDto` → `TerceroDto` | Propuesta |
+| `GET /api/v1/proveedores` | `listarProveedores` | `RF-COM-001` | filtros/paginación → `TercerosPage` | Propuesta |
+| `POST /api/v1/proveedores` | `crearProveedor` | `RF-COM-001` | `CrearProveedorDto` → `TerceroDto` | Propuesta |
+| `GET /api/v1/proveedores/{proveedorId}` | `obtenerProveedor` | `RF-COM-001` | UUID → `TerceroDto` | Propuesta |
+| `PATCH /api/v1/proveedores/{proveedorId}` | `actualizarProveedor` | `RF-COM-001` | `ActualizarTerceroDto` → `TerceroDto` | Propuesta |
+| `GET /api/v1/ventas` | `listarVentas` | `RF-VEN-001` | filtros/paginación → `VentasPage` | Propuesta |
+| `POST /api/v1/ventas` | `crearVenta` | `RF-VEN-001`, `RF-VAL-001` | `CrearVentaDto` → `VentaDto` | Propuesta |
+| `GET /api/v1/ventas/{ventaId}` | `obtenerVenta` | `RF-VEN-001`, `RF-TRZ-001` | UUID → `VentaDto` | Propuesta |
+| `POST /api/v1/ventas/{ventaId}/confirmar` | `confirmarVenta` | `RF-VEN-001`, `RF-VEN-002`, `RF-INV-002`, `RF-TRZ-001` | `ConfirmarVentaDto` → `VentaDto` | Propuesta arquitectónica; `RF-VEN-002` no confirma esta transición |
+| `POST /api/v1/comprobantes` | `solicitarEmisionComprobante` | `RF-CPE-001`, `RF-SUN-001`, `RF-VEN-002` | `SolicitarEmisionComprobanteDto` → `202 SolicitudEmisionAceptada` | Propuesta; `RF-VEN-002` es inferido |
+| `GET /api/v1/comprobantes/{comprobanteId}` | `obtenerComprobante` | `RF-CPE-001`, `RF-SUN-001`, `RF-TRZ-001` | UUID → estado local y resultado de integración opcional | Propuesta |
 
-## 7. Informe de validación y decisiones pendientes
+El contrato no incluye `DELETE` físico, transferencias, ajustes, reservas, búsquedas externas de identidad, descarga de XML/CDR ni carga ETL. Los 25 métodos propuestos están distribuidos en 15 rutas; el conteo incluye métodos propuestos y no implica aprobación funcional.
 
-### Resultado de comprobaciones
+## 4. Servicios lógicos candidatos
 
-- OpenAPI declara `3.1.0`, versión `0.1.0`, `operationId` únicos y rutas distintas.
-- Las operaciones listadas vinculan RF/RNF y proponen DTOs, entidades y puertos responsables mediante `x-requirements`, `x-dtos`, `x-domain-entities` y `x-application-port`.
-- La tabla de este documento coincide con las 33 combinaciones método/ruta del OpenAPI; las referencias internas comprobadas resuelven.
-- Las respuestas distinguen `201` para creación local, `200` para consulta y `202` para trabajos/solicitudes asíncronos. `202` no afirma aceptación de SUNAT.
-- Los contratos públicos son proyecciones DTO, no tablas ni entidades de persistencia.
-- Las solicitudes de venta no tienen un campo de total. El schema propuesto excluye el precio por línea recibido por el DTO POS existente y lo marca como discrepancia pendiente: la fuente de precio debe resolverse antes de aprobar.
-- El documento previo incluía ejemplos y decisiones que no se conservaron como contratos activos porque contradicen requisitos aún abiertos o afirman hechos no verificados. El mapeo siguiente conserva el propósito funcional y deja explícito qué debe revisarse:
+Estos nombres describen agrupaciones funcionales para la arquitectura MVC/hexagonal; no son clases, puertos ni servicios de aplicación aprobados.
 
-| Contrato anterior | Tratamiento en esta propuesta | Motivo / decisión pendiente |
+| Servicio lógico candidato | Operaciones que podría respaldar | Requisito |
 |---|---|---|
-| `POST /api/v1/inventory/movements/inflows` y su saldo con costo promedio | `POST /api/v1/inventory/receipts` | Se conserva el registro de recepción; el método de valorización no se fija mientras siga pendiente en requisitos. |
-| Transferencia presentada como completada en una operación | `POST /api/v1/inventory/transfers` | Se modela como inicio propuesto; faltan operación de recepción, discrepancias y ciclo de vida aprobados. |
-| `GET /api/v1/inventory/kardex` | `GET /api/v1/inventory/movements` | Se conserva la consulta de movimientos; filtros y proyección se expresan en el OpenAPI actual. |
-| Alta mayorista que confirmaba y reservaba stock inmediatamente | Crear pedido y confirmar mediante operaciones separadas | La confirmación y reserva requieren validación de stock/crédito; la segunda operación continúa propuesta. |
-| `POST /api/v1/billing/invoices` y `GET .../cdr` con códigos y resultados concretos | Solicitud asíncrona en `/api/v1/billing/documents` y consulta del documento | No se inventan códigos de SUNAT ni se presenta una aceptación tributaria como resultado garantizado. Los códigos y datos de respuesta externa dependen de fuentes y contratos por verificar. |
-| Actor/rol fijo para importar saldos y firma de conciliación específica | Trabajo de migración asíncrono con autenticación global | La autorización por rol, la evidencia de conciliación y la procedencia deben definirse; no se inventan claims ni firmas. |
+| Gestión de catálogo | Productos y sus consultas | `RF-PRO-001` |
+| Gestión de almacén e inventario | Almacenes, movimientos y efecto de inventario al confirmar venta | `RF-INV-001`, `RF-INV-002`, vínculo comercial inferido |
+| Gestión de terceros | Clientes y proveedores | `RF-COM-001` |
+| Gestión comercial | Registro y consulta de ventas | `RF-VEN-001`; vínculo con comprobante inferido por `RF-VEN-002` |
+| Emisión e integración de comprobantes | Solicitud y consulta del estado | `RF-CPE-001`, `RF-SUN-001` |
+| Migración histórica | Sin operación pública definida todavía | `RF-MIG-001` |
 
-Los ejemplos anteriores tampoco son ejemplos normativos activos: incluyen datos, estados y validaciones tributarias que no se verificaron contra el modelo aprobado ni fuentes oficiales. Los ejemplos que permanezcan en el OpenAPI son ilustrativos.
+El límite entre servicio de aplicación, adaptador MVC y dominio se concretará en la fase de arquitectura, no mediante este contrato.
 
-- El OpenAPI contiene ejemplos en 7 de 33 operaciones; completar ejemplos de solicitud y respuesta por operación es un pendiente antes de declarar satisfecho el nivel de detalle solicitado.
-- La comprobación de referencias y unicidad fue estática. No había un parser OpenAPI/YAML disponible en el entorno, por lo que la sintaxis no se validó formalmente con una herramienta.
-- No se validaron aquí obligaciones, umbrales, esquemas XSD/Schematron ni códigos SUNAT contra fuentes oficiales. Los identificadores y reglas fiscales que aparecen en requisitos requieren revisión documental independiente.
+## 5. Decisiones de diseño: propuesta y estado
 
-### Pendientes bloqueantes para aprobar
+| Tema | Hecho confirmado por requisitos/documentos fuente | Propuesta para revisión | Pendiente de aprobación |
+|---|---|---|---|
+| HTTP y actualización | Se solicitan gestión/registro y conservación histórica; no se fijan verbos ni reglas de actualización. | `GET` consulta, `POST` crea/ejecuta transición, `PATCH` modifica solo datos descriptivos; sin borrado físico ni `PUT` general. | Aceptar rutas de actualización, campos editables y política de desactivación lógica. |
+| Venta e inventario | Hay requisitos para registrar ventas y movimientos (`RF-VEN-001`, `RF-INV-002`); no establecen cuándo se afectan ni política de stock. | Venta se registra inicialmente sin movimiento y se confirma explícitamente; confirmación y sus movimientos son atómicos. | Stock insuficiente, concurrencia, confirmación parcial, varios almacenes, cancelación/reverso y momento comercial de confirmación. |
+| Autenticación/autorización | Seguridad es `RNF-SEG-001` propuesta; el análisis no aprueba usuarios ni roles. `ACT-P02`–`ACT-P05` son perfiles propuestos. | IdP OIDC/OAuth2 con tokens JWT o mecanismo equivalente; mínimo privilegio y autorización por capacidad. Perfiles de administrador, almacén, vendedor/cajero y responsable contable son solo candidatos. | IdP, sesión/token, claims/scopes, aprovisionamiento, políticas, separación de funciones y matriz de permisos. No se declaran roles como confirmados ni se hace obligatorio `bearerAuth` todavía. |
+| Idempotencia | No hay garantía técnica aprobada expresamente. | Encabezado `Idempotency-Key` en todas las escrituras; mismo contenido devuelve resultado previo, contenido distinto responde `409`. | Ámbito, expiración, protección concurrente, retención y semántica para solicitudes en curso. Reintento SUNAT es independiente del reintento API. |
+| Migración histórica | `RF-MIG-001` exige migrar históricos, sin fuente/formato/proceso definido. | Proceso administrativo ETL/CLI fuera de la API pública, con staging, IDs de origen, validación, reporte de errores, conciliación y aprobación previa a activar registros. | Fuentes, mapeos, volumen, periodo, tratamiento de duplicados, transformación, autorizador y estrategia de reversa. |
+| Modalidad SUNAT | `RF-SUN-001` expresa integración; no especifica canal ni protocolo. | Adaptador/puerto desacoplado detrás del límite de aplicación; contrato API permanece neutral. | Elegir SEE directo u OSE/proveedor luego de requerimientos empresariales y verificación oficial vigente; definir autenticación, ambientes, estados y manejo de respuesta. |
 
-1. Aprobar/validar SPEC-002 y resolver las preguntas del análisis: método de valorización, alcance de lotes, modalidad de emisión (SEE/OSE), contingencia offline y profundidad de migración.
-2. Corregir la contradicción RF-ALM-004/RN-05 y completar RF-SUN-005 en el cuerpo de requisitos; definir el estado real de aprobación del modelo de dominio.
-3. Consolidar el modelo en español frente al segundo documento táctico en inglés; confirmar cardinalidades y ciclo de vida de venta, recepción, transferencia, lote y comprobante.
-4. Alinear los DTOs de solicitud/respuesta: precio POS, pagos mixtos, cuotas mayoristas, proveedor, consultas, actualizaciones, migración/procedencia y resultado de emisión.
-5. Definir RBAC por operación, políticas idempotentes, estados fiscales/locales y responsabilidades exactas del Outbox; resolver si el reintento manual existe.
-6. Verificar con enunciado original y fuentes oficiales los campos, validaciones y reglas tributarias antes de aprobar cualquier contrato fiscal. El enunciado original no está en los archivos examinados.
+Como punto de partida para revisar autorización, los actores candidatos podrían tener estas capacidades. No se asignan permisos obligatorios ni se incorporan como roles de seguridad aprobados:
 
-## 8. Recomendación de flujo Spec-First
+| Actor candidato | Alcance de permisos propuesto | Límites/decisiones pendientes |
+|---|---|---|
+| Administrador (`ACT-P02`) | Administrar catálogo, almacenes, terceros y, si el alcance lo incluye, usuarios/permisos. | Separación de funciones y acceso a datos fiscales/financieros. |
+| Personal de almacén (`ACT-P03`) | Consultar almacenes y movimientos; registrar movimientos no asociados a ventas. | Aprobación de ajustes, recepción, stock insuficiente y autoridad para confirmar ventas. |
+| Vendedor/cajero (`ACT-P04`) | Consultar productos/clientes; registrar y consultar ventas. | Si puede confirmar ventas, emitir solicitudes de comprobante, editar terceros o consultar precios/costos. |
+| Responsable contable/tributario (`ACT-P05`) | Solicitar y consultar emisión de comprobantes y resultados externos. | Si puede operar ventas, reintentar integraciones y acceder a documentos/datos restringidos. |
 
-No implementar controladores ni servicios sobre este borrador. Primero cerrar y aprobar los requisitos; después reconciliar el dominio y DTOs con las decisiones confirmadas; finalmente revisar este OpenAPI y el presente documento como `REVIEW` y `APPROVED`. La aprobación del contrato debe preceder la implementación y sus pruebas de contrato, conforme a `AGENTS.md` y `specs/README.md`.
+### 5.1 Movimiento de inventario
+
+`POST /inventario/movimientos` registra el evento, no un saldo calculado. El consumidor no envía stock físico/disponible, costo promedio ni saldo resultante. El cuerpo exige producto, almacén, tipo, cantidad, unidad y fecha efectiva según el DTO preliminar.
+
+El servidor tendría que comprobar existencia de referencias y reglas semánticas. Aún no están definidos tipos/orígenes, signo, valoración, política de existencias insuficientes, transferencias, momento de contabilización ni corrección del historial. Para evitar doble salida, se propone que los movimientos de venta solo se generen desde `confirmarVenta`, no mediante el endpoint genérico. Esto requiere acordar un catálogo que permita distinguir orígenes antes de aprobar el contrato. Las respuestas `409`/`422` son propuestas, no reglas ya aprobadas.
+
+### 5.2 Venta
+
+`POST /ventas` recibe cliente opcional y líneas mínimas con producto/cantidad y registra un estado inicial sin efecto de inventario. La operación `POST /ventas/{ventaId}/confirmar` es una transición propuesta que acepta asignaciones por línea y almacén. El cuerpo no permite declarar estado, importe total, precios o tributos, porque las reglas de cálculo están pendientes.
+
+La propuesta exige que la confirmación y sus movimientos se persistan todos o ninguno, y que cada detalle quede cubierto exactamente una vez por cantidades asignadas. Es una garantía arquitectónica a aprobar, no un requisito expresamente confirmado. Se debe decidir política de stock insuficiente, concurrencia, posibilidad de varios almacenes, y si existen otros eventos entre registro y confirmación. No está permitido inferir que el stock siempre deba ser no negativo.
+
+### 5.3 Solicitud de comprobante e integración
+
+- `POST /comprobantes` responde `202` como propuesta para indicar que la solicitud quedó registrada localmente. Esto **no significa** que se haya enviado a SUNAT, que haya un CDR o que el documento haya sido aceptado.
+- `GET /comprobantes/{comprobanteId}` distingue `estadoEmision` del resultado externo opcional; la forma de esos estados/códigos sigue pendiente.
+- No se permite asumir que cada venta genera un comprobante inmediatamente o uno solo.
+- No se definen en este contrato XML, firma, certificado, CDR, plazos, códigos SUNAT, servicios SOAP/OSE ni formato de representación impresa. Se deberán especificar tras verificar las fuentes oficiales vigentes y la modalidad elegida.
+
+### 5.4 Idempotencia de solicitudes
+
+Se propone el encabezado `Idempotency-Key` en cada escritura. Un reintento con la misma clave y el mismo contenido debe recuperar el resultado previamente registrado; la misma clave con contenido diferente se rechaza con `409`. La clave y la respuesta asociada deben almacenarse de manera que no haya una ventana de duplicación ante concurrencia o caída. Quedan pendientes el alcance (por cliente/operación), retención, recuperación de solicitudes en curso y conducta tras vencimiento. Un reintento de envío al proveedor SUNAT es distinto de repetir una llamada API y no debe crear otro comprobante; se requiere identidad documental persistida y estado de integración.
+
+## 6. Errores HTTP propuestos
+
+| HTTP | Uso preliminar | Condición |
+|---|---|---|
+| `400` | Solicitud mal formada o inválida estructuralmente | El servidor no procesa la operación. |
+| `404` | Recurso no encontrado | No confirma reglas de ocultamiento por autorización. |
+| `409` | Conflicto de estado, duplicidad o concurrencia | Catálogo de causas pendiente. |
+| `422` | Regla semántica no satisfecha | No asignar aquí códigos normativos SUNAT. |
+| `500` | Error inesperado | Sin detalles internos sensibles. |
+
+`401`/`403` no están en las respuestas del borrador mientras no se apruebe un esquema de autenticación; deben incorporarse junto con la definición de seguridad. Las respuestas `400`, `404`, `409`, `422` y `500` utilizan `application/problem+json`. La consistencia de esquemas y aplicación real de las reglas todavía no puede verificarse sin implementación.
+
+## 7. Matriz de cobertura y pendientes
+
+| Requisito | Cobertura en API | Pendiente |
+|---|---|---|
+| `RF-PRO-001` | Crear/listar/consultar producto y actualización descriptiva propuesta. | Atributos mínimos, campos editables y desactivación. |
+| `RF-INV-001` | Listar/crear/consultar almacén y actualización descriptiva propuesta. | Atributos, si almacén es único/múltiple, y desactivación. |
+| `RF-INV-002` | Registrar/listar/consultar movimientos; confirmación de venta propone su trazabilidad. | Semántica de tipos/orígenes, saldos, valorización, reversos y política de stock. |
+| `RF-COM-001` | Crear/listar/consultar clientes y proveedores; actualización descriptiva propuesta. | Datos, identificación, reglas de duplicidad y campos editables. |
+| `RF-VEN-001` | Crear/listar/consultar ventas; confirmación explícita de venta propuesta. | Etapas, pagos, precios, impuestos, devoluciones y reglas de stock. |
+| `RF-VEN-002` | Solicitar emisión ligada a venta como propuesta. | Confirmar obligatoriedad, cardinalidad y ciclo de comprobantes por venta. |
+| `RF-CPE-001` | Solicitar/consultar un comprobante. | Tipos, perfil UBL, datos fiscales y validaciones oficiales. |
+| `RF-SUN-001` | Consultar estado/resultados de integración; servicio externo queda detrás de la frontera API. | Modalidad de emisión, autenticación, protocolo, ambientes y fallos. |
+| `RF-MIG-001` | Sin endpoint definido. | Faltan fuentes, formatos, datos, periodo y procedimiento de aprobación/conciliación. |
+| `RF-VAL-001` | Esquemas estructurales externos más respuestas de error genéricas. | Reglas semánticas por proceso y reporte de errores. |
+| `RF-TRZ-001` | Referencias a venta, movimiento y comprobante en recursos consultables. | Campos de auditoría, procedencia de legado, retención y navegación requerida. |
+
+## 8. Aprobación antes de implementación
+
+Antes de cambiar el estado a `REVIEW` o `APPROVED`, se requiere:
+
+1. Acordar qué operaciones de consulta/alta/actualización son necesarias por cada recurso.
+2. Cerrar los campos DTO, nombres, formatos, precisión de cantidades/importes, paginación y errores.
+3. Decidir el flujo de inventario asociado a venta y criterios de aceptación/concurrencia.
+4. Definir autenticación y permisos; seguridad no se considera resuelta por este contrato.
+5. Especificar migración tras obtener muestras de la fuente legada.
+6. Verificar contratos tributarios contra documentación oficial vigente y confirmar modalidad SUNAT.
+7. Validar sintaxis OpenAPI, referencias externas y consistencia con JSON Schema usando herramientas aprobadas del proyecto.
+8. Revisar `SPEC-002`, que permanece en `DRAFT`, y aprobar explícitamente las propuestas antes de implementación.
+
+No se deben crear endpoints en código ni implementar adaptadores hasta que el contrato y su especificación madre sean aprobados.

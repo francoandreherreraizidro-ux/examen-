@@ -1,305 +1,170 @@
-# SPEC-002: Sistema Comercial, Control de Inventarios Multialmacén y Facturación Electrónica UBL 2.1
+# SPEC-002: Sistema comercial, inventario y comprobantes electrónicos
 
 ---
 
-## 📋 Metadata
+## Metadata
 
-| Attribute | Details |
+| Campo | Valor |
 |---|---|
-| **Spec ID** | SPEC-002 |
-| **Title** | Sistema Comercial, Control de Inventarios Multialmacén y Facturación Electrónica UBL 2.1 |
-| **Status** | `DRAFT` <!-- Options: DRAFT | REVIEW | APPROVED | IN_PROGRESS | IMPLEMENTED | RETIRED --> |
-| **Author(s)** | Senior Software Architect & Requirements Analyst |
-| **Reviewer(s)** | Evaluador Docente de Arquitectura de Software |
-| **Created Date** | 2026-10-22 |
-| **Target Milestone** | v1.0.0 (Entrega Integral de Arquitectura) |
-| **Related ADRs** | [ADR-0001](../architecture/adrs/0001-record-architecture-decisions.md), [ADR-0002 (Arquitectura Hexagonal + MVC)](../../04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md) |
-| **Related API Spec**| [API Contract Specification](../../05_Contratos_API/especificacion_contratos_api.md) |
-| **Academic Deliverables** | [01 Requisitos](../../01_Analisis_Requisitos/analisis_requisitos.md), [02 Dominio](../../02_Modelo_Dominio/modelo_dominio.md), [03 DTOs/Schemas](../../03_DTOs_Schemas/dtos_schemas.md), [06 Trazabilidad SUNAT](../../06_Matriz_Trazabilidad_Regulatoria/matriz_trazabilidad_regulatoria.md) |
+| ID | `SPEC-002` |
+| Estado | `DRAFT` — no aprobado para implementación |
+| Alcance fuente | [Análisis de requisitos vigente](../../01_Analisis_Requisitos/analisis_requisitos.md) |
+| Modelo de dominio | [Modelo conceptual](../../02_Modelo_Dominio/modelo_dominio.md) |
+| Contratos de datos | [DTOs y Schemas](../../03_DTOs_Schemas/dtos_schemas.md) |
+| Contratos API | [Especificación API](../../05_Contratos_API/especificacion_contratos_api.md), [OpenAPI](../api/sistema-comercial.openapi.yaml) |
+| Arquitectura propuesta | [MVC y arquitectura hexagonal](../../04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md) |
+| Trazabilidad normativa | [Marco UBL/SUNAT](../../06_Matriz_Trazabilidad_Normativa/marco_normativo_ubl_sunat.md), [matriz](../../06_Matriz_Trazabilidad_Normativa/matriz_trazabilidad_normativa.csv), [brechas](../../06_Matriz_Trazabilidad_Normativa/informe_brechas_normativas.md) |
 
----
+## 1. Fuente de verdad y estado de esta especificación
 
-## 1. Executive Summary & Problem Statement
+Esta versión reconcilia el borrador anterior con los requisitos vigentes. El [análisis de requisitos](../../01_Analisis_Requisitos/analisis_requisitos.md) es la fuente normativa del alcance del examen; conserva los códigos `RF-*` y `RNF-*` tal como están allí. Esta especificación no crea códigos nuevos ni convierte inferencias o propuestas en requisitos aprobados.
 
-### 1.1 Problem Statement
-La empresa bajo estudio es una distribuidora mediana de abarrotes y mercadería general que atiende simultáneamente a dos canales comerciales:
-1. **Canal Minorista (Retail / Mostrador)**: Ventas de alta rotación, cobro inmediato y emisión masiva de Boletas de Venta.
-2. **Canal Mayorista**: Ventas corporativas de alto volumen por pedido, precios escalonados por volumen, líneas de crédito comercial y emisión obligatoria de Facturas Electrónicas con detalle de cuotas de crédito.
+Las versiones anteriores de este borrador describían como obligatorios POS, mayorista/crédito, cuotas, categorías de impuestos, códigos/catálogos SUNAT, lotes, reglas de stock, una modalidad SOAP/OSE, operaciones específicas, tiempos de rendimiento, esquemas de errores y patrones de persistencia. Esos detalles no están confirmados por el análisis vigente. Se retiran de los criterios obligatorios de esta versión; podrán estudiarse como propuestas separadas, con fuentes y aprobación explícitas.
 
-El sistema legado actual presenta:
-* **Descontrol de existencias multialmacén**: Desfase entre el inventario físico y contable, pérdidas sin justificación y quiebres de stock en puntos de venta.
-* **Riesgo tributario y fiscal ante la SUNAT**: Errores en la construcción de XML UBL 2.1, retrasos en la recepción de la Constancia de Recepción (CDR), e incumplimiento del plazo legal máximo de 3 días calendario (RS 193-2020 y RS 000003-2023).
-* **Obsolescencia del sistema heredado**: Necesidad de migrar catálogos y saldos iniciales de inventario sin interrumpir la operación ni corromper periodos fiscales pasados.
-* **Acoplamiento tecnológico**: Dificultad para integrar nuevos servicios o soportar caídas de conectividad sin bloquear las cajas registradoras.
+Todos los contratos y decisiones relacionados siguen en `DRAFT`. Esta especificación no autoriza implementación, no certifica cumplimiento de SUNAT y no afirma que validar un XML contra XSD baste para cumplir obligaciones tributarias.
 
-### 1.2 Proposed Solution
-Diseñar y especificar la arquitectura de software de una plataforma modular desacoplada basada en **Modelo-Vista-Controlador (MVC)** articulado con **Arquitectura Hexagonal (Ports & Adapters)** y base de datos relacional **PostgreSQL**, garantizando:
-* Gestión integral multialmacén con Kardex permanente físico y valorizado (fórmula de Costo Promedio Ponderado, Catálogo N° 12 SUNAT).
-* Emisión y validación sintáctica/semántica de Comprobantes de Pago Electrónicos (CPE) conforme al estándar **OASIS UBL 2.1** (Facturas `01`, Boletas `03`, Notas de Crédito `07` y Débito `08`).
-* Desacoplamiento de la disponibilidad en línea de SUNAT mediante el patrón **Transactional Outbox**, asegurando que las ventas en mostrador concluyan en $< 1.5$ segundos sin riesgo de comprobantes perdidos.
-* Migración auditada y conciliada de saldos iniciales y catálogo desde el sistema legado.
+### Convenciones de certeza
 
-### 1.3 Out of Scope
-* Implementación de pasarelas de pago con tarjeta en caliente (se modela el registro del medio de pago y código de referencia POS bancario).
-* Gestión de nóminas, recursos humanos o contabilidad financiera completa (únicamente se cubre la facturación fiscal y el libro de inventarios/Kardex).
-* Desarrollo de aplicaciones móviles nativas (el alcance cubre servicios API REST, interfaces web y terminales POS).
+- **Expreso:** requisito que figura explícitamente en el análisis vigente.
+- **Inferido:** relación razonable, pero pendiente de confirmación por el responsable.
+- **Propuesto:** alternativa de diseño no aprobada.
+- **Pendiente:** falta información para precisar la regla, campo, proceso o criterio de aceptación.
 
----
+## 2. Problema y objetivo
 
-## 2. User Personas & User Stories
+La empresa comercializa abarrotes y mercadería al por mayor y menor. El examen solicita diseñar un sistema que gestione productos, almacén e historial de movimientos de inventario; clientes, proveedores y ventas; emisión de comprobantes electrónicos e integración con SUNAT; y migración de datos históricos, validación y trazabilidad.
 
-### 2.1 Personas
-* **Cajero / Vendedor Minorista (Carlos - POS)**: Requiere registrar ventas en mostrador a gran velocidad, leer códigos de barras, cobrar en efectivo o billetera digital y emitir boletas de venta al instante sin bloqueos de red.
-* **Ejecutivo de Ventas Mayoristas (Mariana - Corporativo)**: Gestiona pedidos de alto volumen, consulta existencias multialmacén, solicita reserva de stock y programa ventas a crédito con cuotas y fechas de vencimiento.
-* **Jefe de Almacén (Roberto - Logística)**: Supervisa ingresos de proveedores, autoriza traslados interalmacén, concilia diferencias físicas y audita el Kardex permanente valorizado.
-* **Contador / Responsable de Facturación (Sofía - Tributación)**: Monitorea el estado de los comprobantes electrónicos ante SUNAT, revisa los CDRs, emite Notas de Crédito por anulación o descuento y fiscaliza el cumplimiento de los plazos legales.
-* **Administrador del Sistema / TI (Alejandro - Infraestructura)**: Parametriza almacenes y series oficiales, custodia el certificado digital X.509 y ejecuta los procesos ETL de migración de datos legados.
+El objetivo de esta especificación es mantener trazables esas capacidades mientras se elaboran los documentos de dominio, DTOs/Schemas, arquitectura MVC con principios hexagonales, contratos API y matriz normativa. Se debe considerar PostgreSQL y UBL Invoice 2.1, y documentar las decisiones no establecidas antes de tratarlas como definitivas.
 
-### 2.2 User Stories
-* **US-01 (Venta Rápida POS Retail)**: Como *Cajero Retail*, quiero registrar una venta en mostrador escaneando productos y cobrando en efectivo o tarjeta, para entregar de inmediato el comprobante impreso (Boleta o Factura) sin demoras ocasionadas por la conexión a internet.
-* **US-02 (Venta Mayorista a Crédito)**: Como *Ejecutivo Mayorista*, quiero ingresar un pedido mayorista asignando cuotas de crédito comercial, para que el sistema valide la línea de crédito del cliente y reserve la mercadería en el almacén central.
-* **US-03 (Kardex Permanente Inmutable)**: Como *Jefe de Almacén*, quiero que cada entrada, salida, traslado o ajuste genere un asiento cronológico inmutable recalculando el costo promedio ponderado, para cumplir con el formato oficial del Libro de Inventarios de SUNAT.
-* **US-04 (Emisión UBL 2.1 y Firma Digital)**: Como *Contador*, quiero que el sistema genere automáticamente el archivo XML UBL 2.1 y aplique la firma digital XMLDSig con el certificado X.509 de la empresa, garantizando la validez jurídica del documento.
-* **US-05 (Despacho Asíncrono y Gestión de CDR)**: Como *Contador*, quiero que los comprobantes firmados se transmitan a SUNAT en segundo plano y se procese el archivo de respuesta (CDR), actualizando el estado a Aceptado o reportando el código de rechazo exacto.
-* **US-06 (Anulación mediante Nota de Crédito)**: Como *Contador*, quiero emitir una Nota de Crédito electrónica vinculada a una Factura aceptada previamente por SUNAT, para revertir la operación comercial y restituir el stock al almacén de origen sin alterar registros históricos.
-* **US-07 (Migración y Conciliación de Saldos Legados)**: Como *Administrador de TI*, quiero cargar los saldos de apertura de stock desde archivos del sistema anterior a una fecha de corte, para emitir un reporte de cuadre y generar el asiento inicial en el Kardex.
-* **US-08 (Control Sanitario de Lotes Perecibles)**: Como *Jefe de Almacén*, quiero registrar lotes y fechas de vencimiento para los productos perecibles, para que el sistema impida despachar ítems caducados.
+## 3. Alcance funcional trazado
 
----
-
-## 3. Detailed Functional Requirements
-
-| Requirement ID | Description | Priority | Complexity |
+| Código vigente | Requisito expresado en el análisis | Certeza | Límite o aclaración |
 |---|---|---|---|
-| **RF-CAT-001** | Catálogo unificado de productos con SKU único, código de barras, descripción comercial y eliminación lógica (*soft delete*). | P0 (Must) | Low |
-| **RF-CAT-002** | Esquema dual de precios por producto: precio minorista estándar y escalas de precio mayoristas por volumen de compra. | P0 (Must) | Medium |
-| **RF-CAT-003** | Normalización obligatoria de unidades de medida según el Catálogo N° 03 de SUNAT (`NIU`, `KGM`, `BX`, `PK`). | P0 (Must) | Low |
-| **RF-CAT-004** | Control de lotes y fechas de caducidad para productos clasificados como perecibles con bloqueo de despacho caduco. | P1 (Should) | Medium |
-| **RF-CAT-005** | Clasificación arancelaria y de bienes según el código UNSPSC del Catálogo N° 25 de SUNAT. | P2 (Could) | Low |
-| **RF-ALM-001** | Gestión multialmacén (almacén central, tiendas retail, cuarentena) con código de establecimiento anexo SUNAT (Catálogo 19). | P0 (Must) | Medium |
-| **RF-ALM-002** | Registro histórico inmutable de movimientos de inventario (Kardex físico y valorizado por Costo Promedio Ponderado, Cat. 12). | P0 (Must) | High |
-| **RF-ALM-003** | Registro de entradas (Inflows) por compra nacional sustentada en Factura o Guía de Remisión del proveedor. | P0 (Must) | Medium |
-| **RF-ALM-004** | Registro de salidas (Outflows) por venta o baja, con prohibición estricta de saldos negativos en inventario (`RN-05`). | P0 (Must) | High |
-| **RF-ALM-005** | Transferencias interalmacén en dos fases (despacho en tránsito y recepción) con soporte para mermas en transporte. | P1 (Should) | Medium |
-| **RF-ALM-006** | Ajustes de inventario físico (sobrantes/faltantes) debidamente justificados y autorizados por el Jefe de Almacén. | P1 (Should) | Medium |
-| **RF-DIR-001** | Maestro de clientes categorizados en retail y mayoristas, con validación de DNI (8 dígitos) y RUC (11 dígitos, Módulo 11, Cat. 06). | P0 (Must) | Medium |
-| **RF-DIR-002** | Maestro de proveedores con RUC oficial validado y condiciones de compra. | P0 (Must) | Low |
-| **RF-DIR-003** | Configuración y control de líneas de crédito comercial y plazos máximos para clientes mayoristas. | P1 (Should) | Medium |
-| **RF-DIR-004** | Consulta automatizada de padrones oficiales RUC/DNI con mecanismo de caché local y tolerancia a desconexión. | P2 (Could) | Medium |
-| **RF-VEN-001** | Punto de Venta Retail (POS) de alta velocidad para mostrador con lectura de código de barras y liquidación de vuelto. | P0 (Must) | High |
-| **RF-VEN-002** | Flujo comercial mayorista: cotización, pedido corporativo, validación crediticia, reserva de stock y facturación. | P0 (Must) | High |
-| **RF-VEN-003** | Motor tributario automatizado: liquidación de Gravado (18% IGV), Exonerado (0%), Inafecto e ICBPER (bolsas plásticas). | P0 (Must) | High |
-| **RF-VEN-004** | Gestión de descuentos comerciales por volumen en líneas de venta reflejados en el comprobante fiscal. | P1 (Should) | Medium |
-| **RF-CPE-001** | Generación de Facturas Electrónicas (Tipo 01) bajo OASIS UBL 2.1 con desglose de cuotas a crédito (RS 193-2020). | P0 (Must) | High |
-| **RF-CPE-002** | Generación de Boletas de Venta Electrónicas (Tipo 03) UBL 2.1 con validación obligatoria de DNI para importes $\ge$ S/ 700.00. | P0 (Must) | High |
-| **RF-CPE-003** | Generación de Notas de Crédito (Tipo 07) y Notas de Débito (Tipo 08) UBL 2.1 vinculadas a comprobante de referencia. | P0 (Must) | High |
-| **RF-CPE-004** | Módulo criptográfico de firma digital XMLDSig con certificado tributario X.509 y cálculo de Hash SHA-256 (DigestValue). | P0 (Must) | High |
-| **RF-CPE-005** | Generación de representación impresa PDF (formato ticket 80mm y A4) con código QR oficial según formato SUNAT. | P0 (Must) | Medium |
-| **RF-CPE-006** | Generación de Resúmenes Diarios de Boletas y Comunicaciones de Baja conforme a especificaciones UBL 2.1. | P1 (Should) | High |
-| **RF-SUN-001** | Empaquetado ZIP y transmisión segura mediante protocolo SOAP WSDL (`sendBill`) hacia servidores de SUNAT. | P0 (Must) | High |
-| **RF-SUN-002** | Descompresión, procesamiento y persistencia inmutable de la Constancia de Recepción (CDR oficial de SUNAT). | P0 (Must) | High |
-| **RF-SUN-003** | Consulta asíncrona de estado de tickets (`getStatus`) para resúmenes diarios. | P1 (Should) | Medium |
-| **RF-SUN-004** | Manejo de contingencias por indisponibilidad de SUNAT con cola de reintentos exponenciales dentro del plazo de 3 días. | P0 (Must) | High |
-| **RF-SUN-005** | Desacoplamiento de la venta respecto a SUNAT mediante el patrón Transactional Outbox en PostgreSQL. | P0 (Must) | High |
-| **RF-MIG-001** | Ingesta y normalización ETL de catálogos de productos, clientes y proveedores desde el sistema legado. | P0 (Must) | Medium |
-| **RF-MIG-002** | Carga y conciliación de saldos de apertura de stock por almacén con generación del asiento inicial en Kardex (Cat. 12, código 16). | P0 (Must) | High |
-| **RF-MIG-003** | Repositorio histórico de consultas de ejercicios pasados alojado en esquema segregado de solo lectura (`legacy_archive`). | P1 (Should) | Medium |
-| **RF-TRZ-001** | Trazabilidad integral bidireccional: Comprobante Fiscal $\leftrightarrow$ Venta Comercial $\leftrightarrow$ Movimiento Kardex $\leftrightarrow$ CDR SUNAT. | P0 (Must) | High |
-| **RF-TRZ-002** | Validación sintáctica y semántica previa a la persistencia en base de datos con transaccionalidad ACID atómica. | P0 (Must) | High |
-| **RF-TRZ-003** | Registro inmutable de auditoría (*Audit Log*) para eventos sensibles (cambios de precios, ajustes de inventario, anulaciones). | P0 (Must) | Medium |
+| `RF-PRO-001` | Gestionar información de productos comercializados. | Expreso | Atributos, identificadores y operaciones concretas pendientes. |
+| `RF-INV-001` | Gestionar información necesaria de almacenes. | Expreso | Cantidad, estructura y reglas de almacén pendientes. |
+| `RF-INV-002` | Registrar históricamente ingresos, salidas y otros movimientos de inventario. | Expreso | Tipos, valoración, saldo negativo, reversos y momento de contabilización pendientes. |
+| `RF-COM-001` | Gestionar clientes y proveedores. | Expreso | Datos, identificación, reglas de duplicidad y estados pendientes. |
+| `RF-VEN-001` | Registrar y consultar ventas. | Expreso | Canales, etapas, pagos, precios, devoluciones y relación temporal con inventario pendientes. |
+| `RF-VEN-002` | Relacionar una venta con los datos necesarios para emitir su comprobante cuando corresponda. | Inferido | No establece obligatoriedad, cardinalidad ni emisión inmediata. |
+| `RF-CPE-001` | Contemplar emisión electrónica conforme al alcance empresarial por definir y considerar UBL Invoice 2.1. | Expreso | Tipos documentales y perfil SUNAT vigente por confirmar. |
+| `RF-SUN-001` | Integrarse con servicios SUNAT en el flujo de comprobantes. | Expreso | SEE, canal, protocolo, autenticación, ambientes y estados pendientes. |
+| `RF-MIG-001` | Contemplar migración histórica desde el sistema anterior. | Expreso | Fuentes, periodo, formato, alcance y conciliación pendientes. |
+| `RF-VAL-001` | Validar los datos tratados por los procesos incluidos. | Expreso | Reglas semánticas y reporte de errores pendientes. |
+| `RF-TRZ-001` | Conservar trazabilidad de los datos y operaciones que se acuerden como relevantes. | Expreso | Eventos, retención, permisos y granularidad pendientes. |
 
----
+## 4. Restricciones no funcionales y arquitectónicas
 
-## 4. Non-Functional Requirements (NFRs)
+| Código vigente | Restricción | Certeza | Estado |
+|---|---|---|---|
+| `RNF-TEC-001` | PostgreSQL será la base de datos del sistema diseñado. | Expreso | Versión, topología y operación pendientes. |
+| `RNF-ARQ-001` | Arquitectura modular basada en MVC y principios hexagonales. | Expreso | Límites modulares y articulación se documentan como propuesta arquitectónica. |
+| `RNF-SDD-001` | Definir contratos de datos y APIs antes de implementar código. | Expreso | Los contratos actuales siguen `DRAFT`. |
+| `RNF-DOC-001` | Considerar UBL Invoice 2.1 en el diseño de comprobantes. | Expreso | Perfil y reglas SUNAT no se presumen; verificar fuentes vigentes. |
+| `RNF-SEG-001` | Definir seguridad, privacidad y control de acceso. | Propuesto en análisis | No hay mecanismo, roles ni políticas aprobados. |
+| `RNF-REL-001` | Definir disponibilidad y comportamiento ante fallos. | Propuesto en análisis | No hay SLA, patrón de colas ni operación offline aprobados. |
+| `RNF-PER-001` | Definir rendimiento y capacidad. | Propuesto en análisis | No hay métricas, volúmenes o umbrales aprobados. |
+| `RNF-MIG-001` | Definir integridad, conciliación y recuperación para migración. | Propuesto en análisis | Se precisa con las fuentes y el proceso legado. |
 
-* **Performance**:
-  * Finalización de transacción y emisión local del ticket en mostrador POS retail con $P_{95} \le 1.5$ segundos.
-  * Procesamiento y firma criptográfica XMLDSig en $\le 350$ milisegundos por documento.
-* **Security & Privacy**:
-  * Autenticación basada en tokens JWT con control de acceso basado en roles (RBAC).
-  * Almacenamiento seguro del certificado digital tributario X.509 (`.p12`/`.pfx`) con claves custodiadas fuera del código fuente.
-  * Cifrado en tránsito mediante TLS 1.2 o superior en todas las conexiones externas hacia SUNAT y PostgreSQL.
-* **Reliability & Availability**:
-  * Cero pérdida de comprobantes ante caídas de los Web Services de SUNAT mediante el patrón *Transactional Outbox*.
-  * Idempotencia estricta en transmisiones tributarias mediante cabecera `Idempotency-Key` y hash de contenido.
-* **Compliance & Standards**:
-  * Cumplimiento estricto del estándar OASIS UBL 2.1 y directrices de la RS 097-2012, RS 193-2020 y RS 000003-2023 de SUNAT.
-  * Formato formal de errores bajo el estándar RFC 7807 / RFC 9457 (*Problem Details for HTTP APIs*).
-* **Data Integrity & Auditability**:
-  * Garantía de transaccionalidad ACID en PostgreSQL 15+ con niveles de aislamiento `Read Committed` o `Serializable`.
-  * Inmutabilidad absoluta de registros en Kardex y comprobantes con CDR de aceptación oficial.
+## 5. Actores
 
----
+El análisis confirma como sistemas externos los servicios de SUNAT (`ACT-01`) y la fuente/sistema anterior (`ACT-02`). Los actores humanos son candidatos propuestos (`ACT-P01` a `ACT-P06`); no se fijan roles ni permisos como requisitos de esta especificación.
 
-## 5. Domain Models & Data Schemas
+## 6. Reglas y comportamientos aún no establecidos
 
-El modelo conceptual del dominio se articula a través del siguiente diagrama de agregados clave (detallado extensivamente en [02_Modelo_Dominio/modelo_dominio.md](../../02_Modelo_Dominio/modelo_dominio.md)):
+No hay reglas transaccionales específicas de venta, stock, tributación o seguridad aprobadas por el análisis actual. Deben permanecer pendientes:
 
-```mermaid
-classDiagram
-    direction TB
+- si se permite stock negativo, reservas, venta sin conexión o salidas parciales;
+- política de confirmación de venta y relación con movimientos de inventario;
+- método de valorización, ajuste, transferencia, devolución y corrección de historial;
+- campos comerciales/fiscales, precios, descuentos, monedas, tributos y redondeo;
+- tipos de comprobantes, numeración, anulaciones/notas y momento de emisión;
+- modalidad SUNAT, plazos aplicables, credenciales, transporte, respuestas y reintentos;
+- identidad de emisor/adquirente, catálogos y perfil UBL nacional vigente;
+- fuentes legadas, entidades/periodos migrados, transformación, deduplicación y aceptación;
+- autenticación, perfiles, autorizaciones, retención y auditoría por usuario.
 
-    class Producto {
-        +UUID id
-        +String sku
-        +String nombre
-        +String unidadMedida
-        +Boolean esPerecible
-        +Boolean activo
-    }
+Las reglas de una fuente normativa sólo se incorporan después de validar la fuente oficial vigente, su ámbito documental y su aplicabilidad al SEE elegido. Las restricciones del XSD OASIS se distinguen de las obligaciones SUNAT y de las decisiones internas.
 
-    class EscalaPrecio {
-        +UUID id
-        +String tipoEscala
-        +Decimal cantidadMinima
-        +Decimal precioUnitarioConIgv
-    }
+## 7. Escenarios de aceptación preliminares
 
-    class Almacen {
-        +UUID id
-        +String codigo
-        +String nombre
-        +String codigoEstablecimientoSunat
-    }
+Los siguientes escenarios son criterios de cobertura de alto nivel derivados del análisis. No fijan políticas todavía abiertas ni sustituyen los contratos detallados. Los criterios de negocio precisos deben completarse antes de elevar la especificación a `REVIEW`.
 
-    class StockAlmacen {
-        +UUID id
-        +Decimal cantidadFisica
-        +Decimal cantidadReservada
-        +Decimal cantidadDisponible
-        +Decimal costoPromedioPonderadoUnitario
-    }
+### AC-01 — Gestión de productos y almacenes
 
-    class MovimientoInventario {
-        +UUID id
-        +Timestamp fechaHora
-        +String tipoOperacionSunat
-        +Decimal cantidadEntrada
-        +Decimal cantidadSalida
-        +Decimal saldoCantidad
-        +Decimal saldoCostoUnitario
-    }
+- **Dado** un usuario autorizado una vez definidos los actores y permisos,
+- **cuando** gestiona información de productos o almacenes dentro del alcance acordado,
+- **entonces** el sistema registra y permite consultar la información conforme a los DTOs aprobados y conserva las validaciones acordadas.
+- Relacionado: `RF-PRO-001`, `RF-INV-001`, `RF-VAL-001`.
 
-    class Cliente {
-        +UUID id
-        +String tipoDocumentoIdentidad
-        +String numeroDocumento
-        +String nombreORazonSocial
-        +Decimal limiteCredito
-    }
+### AC-02 — Historial de movimientos
 
-    class Venta {
-        +UUID id
-        +String canalVenta
-        +String estado
-        +String condicionPago
-        +Decimal totalPagar
-    }
+- **Dado** un movimiento de inventario aceptado conforme a reglas por definir,
+- **cuando** se registra y luego se consulta,
+- **entonces** la información histórica requerida puede recuperarse con la trazabilidad acordada.
+- Relacionado: `RF-INV-002`, `RF-VAL-001`, `RF-TRZ-001`.
+- **Pendiente:** qué campos, estados, reglas de corrección y permisos definen la aceptación.
 
-    class DetalleVenta {
-        +UUID id
-        +Decimal cantidad
-        +Decimal precioUnitarioConIgv
-        +Decimal totalLinea
-    }
+### AC-03 — Terceros y ventas
 
-    class CuotaCredito {
-        +UUID id
-        +Integer numeroCuota
-        +Decimal montoCuota
-        +Date fechaVencimiento
-    }
+- **Dado** información de clientes/proveedores y datos de una venta,
+- **cuando** se administran terceros o se registra/consulta una venta conforme al flujo aprobado,
+- **entonces** se conservan las relaciones e información de negocio que hayan sido acordadas.
+- Relacionado: `RF-COM-001`, `RF-VEN-001`, `RF-VAL-001`, `RF-TRZ-001`.
+- **Pendiente:** campos requeridos, etapas de venta, cliente opcional/obligatorio y efectos sobre inventario.
 
-    class ComprobanteElectronico {
-        +UUID id
-        +String tipoComprobante
-        +String serie
-        +Integer correlativo
-        +String estado
-        +String digestValue
-        +Binary xmlFirmado
-        +Binary cdrZip
-    }
+### AC-04 — Comprobante electrónico
 
-    Producto "1" *-- "1..*" EscalaPrecio
-    Almacen "1" *-- "0..*" StockAlmacen
-    Producto "1" --> "0..*" StockAlmacen
-    Almacen "1" --> "0..*" MovimientoInventario
-    Producto "1" --> "0..*" MovimientoInventario
-    Cliente "1" --> "0..*" Venta
-    Almacen "1" <-- Venta : despachada desde
-    Venta "1" *-- "1..*" DetalleVenta
-    DetalleVenta --> "1" Producto
-    Venta "1" *-- "0..*" CuotaCredito
-    Venta "1" ..> "0..*" ComprobanteElectronico : sustenta fiscalmente
-```
+- **Dado** que se hayan aprobado tipo documental, datos y perfil SUNAT aplicable,
+- **cuando** se solicite la emisión de un comprobante,
+- **entonces** el diseño considera UBL Invoice 2.1 y conserva la diferencia entre emisión local, transmisión y resultado externo.
+- Relacionado: `RF-CPE-001`, `RF-VEN-002` (inferido), `RF-SUN-001`, `RNF-DOC-001`, `RF-TRZ-001`.
+- **Pendiente:** no se define aceptación por SUNAT ni plazo, firma, canal o estado sin la decisión y las fuentes correspondientes.
 
----
+### AC-05 — Integración SUNAT
 
-## 6. Edge Cases & Error Handling
+- **Dado** un comprobante y una modalidad de emisión seleccionados,
+- **cuando** se integre con el servicio aplicable,
+- **entonces** el sistema registra los resultados y conserva su trazabilidad de acuerdo con el contrato externo que se apruebe.
+- Relacionado: `RF-SUN-001`, `RF-CPE-001`, `RF-TRZ-001`.
+- **Pendiente:** operación, autenticación, respuesta, fallos y reintento.
 
-| Escenario / Caso Borde | Comportamiento Esperado del Sistema | Código / Mensaje RFC 7807 |
+### AC-06 — Migración
+
+- **Dado** que se conozcan las fuentes y el alcance histórico autorizado,
+- **cuando** se ejecute el proceso de migración definido,
+- **entonces** se validan los registros y se conserva la procedencia y conciliación acordadas.
+- Relacionado: `RF-MIG-001`, `RF-VAL-001`, `RF-TRZ-001`, `RNF-MIG-001`.
+- **Pendiente:** muestra de origen, mapeos, granularidad, umbrales y aceptación.
+
+## 8. Mapeo a entregables
+
+| Necesidad/entregable | Documento actual | Estado |
 |---|---|---|
-| Salida de almacén excede existencias físicas | Aborta la transacción; impide saldos negativos según regla `RN-05`. | `ERR_INSUFFICIENT_STOCK` (422) |
-| Solicitud de crédito mayorista excede límite disponible | Rechaza la orden a crédito y notifica al asesor comercial para pago al contado. | `ERR_CREDIT_LIMIT_EXCEEDED` (422) |
-| Emisión de Factura (Tipo 01) para adquirente con DNI | Rechaza la emisión; exige obligatoriamente RUC de 11 dígitos válido (Cat. 06). | `ERR_INVALID_CUSTOMER_TAX_ID` (400) |
-| Caída de conexión o timeout con los servidores de SUNAT | Almacena el comprobante firmado en la tabla Outbox y retorna éxito local con ticket de despacho. | `WARN_SUNAT_TIMEOUT_ENQUEUED` (202) |
-| Reintento de transmisión de un comprobante con CDR Aceptado | Detecta clave de negocio duplicada; retorna el CDR existente sin re-transmitir. | `ERR_DOCUMENT_ALREADY_ACCEPTED` (409) |
-| Sumatoria de cuotas de crédito no cuadra con el monto total | Rechaza la estructuración del comprobante según la regla Schematron de la RS 193-2020. | `ERR_PAYMENT_INSTALLMENTS_MISMATCH` (422) |
-| Boleta de venta $\ge$ S/ 700.00 sin documento del comprador | Bloquea el cobro en mostrador retail hasta registrar el documento de identidad. | `ERR_ANONYMOUS_SALE_EXCEEDS_THRESHOLD` (400) |
+| Análisis de requisitos y trazabilidad inicial | [01_Analisis_Requisitos](../../01_Analisis_Requisitos/analisis_requisitos.md) | DRAFT |
+| Modelo del dominio y diagramas | [02_Modelo_Dominio](../../02_Modelo_Dominio/modelo_dominio.md) | Propuesta para revisión |
+| DTOs y Schemas | [03_DTOs_Schemas](../../03_DTOs_Schemas/dtos_schemas.md) | DRAFT |
+| MVC con visión hexagonal | [04_Arquitectura_MVC_Hexagonal](../../04_Arquitectura_MVC_Hexagonal/diagramas_arquitectura.md) | DRAFT tras reconciliación |
+| Contratos API | [05_Contratos_API](../../05_Contratos_API/especificacion_contratos_api.md) | DRAFT; 25 operaciones en 15 rutas |
+| Trazabilidad normativa | [06_Matriz_Trazabilidad_Normativa](../../06_Matriz_Trazabilidad_Normativa/marco_normativo_ubl_sunat.md) | DRAFT; aplicabilidad parcial y condicional |
 
----
+La carpeta `06_Matriz_Trazabilidad_Regulatoria` contiene un borrador histórico no vigente. Usar únicamente la matriz de `06_Matriz_Trazabilidad_Normativa` y su registro de fuentes.
 
-## 7. Acceptance Criteria (Given / When / Then)
+## 9. Riesgos y brechas para revisión
 
-### Scenario 1: Venta Rápida Minorista en Mostrador (POS) con Boleta de Venta
-* **Given** un cajero autenticado en la terminal POS de la "Tienda 01" con stock suficiente del producto `"Arroz Costeño 50 Kg"` (saldo físico: 20 sacos).
-* **When** registra la venta de 2 sacos a precio minorista (S/ 185.00 c/u, total S/ 370.00), ingresa un pago en efectivo de S/ 400.00 y selecciona comprobante Boleta de Venta con serie `"B001"`.
-* **Then** el sistema confirma la venta en $< 1.5$ segundos, rebaja inmediatamente el saldo físico a 18 sacos, genera el asiento correspondiente en `MovimientoInventario`, calcula el vuelto en S/ 30.00, genera el XML firmado con su DigestValue SHA-256, programa el envío a SUNAT en la tabla Outbox y emite el ticket de compra con código QR impreso.
+1. Los tipos de comprobante y la modalidad SEE no se han decidido; por tanto, no hay mapeo tributario completo.
+2. Los contratos DTO/API aún no incluyen datos fiscales/UBL suficientes para producir una factura; no deben interpretarse como una solicitud lista para implementar.
+3. Las resoluciones consultadas y el XSD base no sustituyen una verificación consolidada de anexos, catálogos y reglas vigentes.
+4. La arquitectura detallada anterior mezclaba opciones (Outbox, SOAP, XMLDSig, costo promedio, roles, POS/crédito y tiempos) con requisitos. La versión reconciliada los identifica como alternativas pendientes, no como decisiones aprobadas.
+5. Se necesita resolver las preguntas abiertas del análisis y revisar esta especificación con el responsable académico antes de `REVIEW` o `APPROVED`.
 
-### Scenario 2: Pedido Mayorista al Crédito con Cuotas (RS 193-2020) y Reserva de Stock
-* **Given** un cliente mayorista registrado con RUC activo y línea de crédito disponible de S/ 30,000.00 en el Almacén Central.
-* **When** el asesor comercial genera un pedido por 50 sacos de arroz (total S/ 8,625.00) bajo modalidad crédito a 30 días, desglosado en dos cuotas iguales (Cuota 1: S/ 4,312.50 a 15 días, Cuota 2: S/ 4,312.50 a 30 días).
-* **Then** el sistema verifica que el monto no exceda la línea de crédito, valida que la sumatoria de cuotas sea idéntica al total a pagar, compromete 50 sacos en `cantidadReservada` (sin alterar el stock físico ni el Kardex todavía) y genera la orden en estado `CONFIRMADA`.
+## 10. Criterio de avance
 
-### Scenario 3: Bloqueo Estricto de Venta por Stock Insuficiente (Invariante RN-05)
-* **Given** un producto en el Almacén Central con un saldo disponible de 5 unidades.
-* **When** un operador intenta confirmar una salida o venta por 10 unidades.
-* **Then** el sistema aborta la operación emitiendo un error `ERR_INSUFFICIENT_STOCK` (código HTTP 422), realiza un rollback completo y garantiza que el balance de inventario y el Kardex permanezcan inalterados en 5 unidades.
+Antes de aprobar esta especificación se requiere:
 
-### Scenario 4: Envío Asíncrono a SUNAT y Procesamiento Exitoso de CDR (Transactional Outbox)
-* **Given** un comprobante electrónico en estado `XML_FIRMADO_OUTBOX_PENDIENTE` en la tabla `billing_outbox_events`.
-* **When** el proceso demonio en segundo plano toma el registro, empaqueta el XML firmado en un contenedor ZIP oficial y remite la invocación SOAP `sendBill` a los servidores de SUNAT.
-* **Then** SUNAT responde satisfactoriamente retornando el archivo `R-*.zip` con código `0` ("La Factura ha sido aceptada"), el worker desempaca el CDR, extrae el hash de recepción y actualiza el comprobante a estado `ACEPTADO_CDR` marcando el evento Outbox como entregado.
+1. revisar y confirmar el alcance de cada RF/RNF y resolver dudas que afecten criterios de aceptación;
+2. acordar qué decisiones de arquitectura se elevan a ADR y conservarlas separadas de obligaciones legales;
+3. cerrar DTOs/API y matriz normativa aplicable al tipo documental y SEE seleccionados;
+4. verificar fuentes oficiales vigentes y completar las pruebas con reglas y datos de referencia aprobados;
+5. obtener autorización expresa para cambiar el estado.
 
-### Scenario 5: Manejo de Contingencia por Falla de Conectividad con SUNAT
-* **Given** una venta confirmada y emitida localmente en una sucursal física.
-* **When** el worker asíncrono intenta conectarse a SUNAT y recibe un timeout de red o error HTTP 503 (Servicio no disponible).
-* **Then** el sistema no cancela la venta física del cliente, mantiene el comprobante en estado pendiente, incrementa el contador de reintentos y programa el siguiente intento mediante retroceso exponencial (*exponential backoff*), alertando al contador si el comprobante supera las 48 horas sin confirmación de CDR.
-
-### Scenario 6: Carga y Conciliación de Saldos Iniciales desde el Sistema Legado
-* **Given** un archivo de extracción del sistema anterior con saldos de cierre al 30 de septiembre de 2026 para el Almacén Central.
-* **When** el Administrador de TI ejecuta la ingesta de saldos iniciales con su token de autorización.
-* **Then** el sistema valida la existencia de cada SKU en el catálogo, verifica que las cantidades sean mayores a cero, genera el asiento de apertura en `MovimientoInventario` con tipo de operación SUNAT `16` ("Saldo Inicial"), actualiza `StockAlmacen` y emite un reporte comparativo de conciliación con discrepancia cero.
-
----
-
-## 8. Verification & Test Plan
-
-### Unit Tests
-- [ ] Validar algoritmo Módulo 11 para números de RUC de 11 dígitos y formato de DNI de 8 dígitos.
-- [ ] Validar la fórmula matemática de Costo Promedio Ponderado en entradas sucesivas de inventario.
-- [ ] Validar invariante de stock no negativo ante solicitudes de despacho que superen el saldo disponible.
-- [ ] Validar el desglose de cuotas a crédito conforme a la regla Schematron de la RS 193-2020 ($\sum \text{Cuotas} == \text{TotalCredito}$).
-- [ ] Validar canonicalización C14N y firmado digital XMLDSig RSA-SHA256 generando el `DigestValue` esperado.
-
-### Integration Tests
-- [ ] `POST /api/v1/sales/pos`: Ejecutar venta en mostrador, verificar atómica deducción de stock e inserción en tabla Outbox.
-- [ ] `POST /api/v1/billing/invoices`: Construir Factura UBL 2.1, validar sintácticamente contra esquemas XSD oficiales de OASIS.
-- [ ] Simulación SOAP `sendBill`: Enviar archivo ZIP a Web Service de homologación SUNAT y verificar deserialización del CDR con código `0`.
-- [ ] Prueba de reintentos Outbox: Simular interrupción de red, verificar reintento exponencial y no duplicación de comprobantes.
-- [ ] `POST /api/v1/migration/jobs/stock-balances`: Ejecutar carga masiva de saldos iniciales y verificar generación de asientos Kardex con código 16.
-
-### End-to-End Acceptance Tests
-- [ ] Escenario completo de atención en mostrador minorista: Escaneo $\rightarrow$ Cobro $\rightarrow$ Deducción de Stock $\rightarrow$ Impresión de Ticket con QR $\rightarrow$ Procesamiento asíncrono de CDR.
-- [ ] Escenario mayorista: Cotización $\rightarrow$ Validación Crediticia $\rightarrow$ Reserva de Stock $\rightarrow$ Facturación UBL 2.1 con Cuotas $\rightarrow$ Recepción de CDR $\rightarrow$ Despacho físico liberando reserva.
+Hasta entonces, `SPEC-002`, los contratos API y los documentos relacionados permanecen en `DRAFT`. No se autoriza implementación ni avance a tareas de código.

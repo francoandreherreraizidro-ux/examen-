@@ -1,0 +1,590 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contratos DTO preliminares del sistema comercial",
+  "description": "Borrador de validación estructural. No es un contrato aprobado ni define endpoints o persistencia.",
+  "$defs": {
+    "Identificador": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "FechaHora": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "CantidadPositiva": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "ImporteNoNegativo": {
+      "type": "number",
+      "minimum": 0
+    },
+    "DatosContacto": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "telefono": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correoElectronico": {
+          "type": "string",
+          "format": "email"
+        },
+        "direccion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "CrearProductoDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "codigoInterno": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "type": "string"
+        },
+        "unidadComercial": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ProductoDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nombre",
+        "estado"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "codigoInterno": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "type": "string"
+        },
+        "unidadComercial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "estado": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ActualizarProductoDto": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null elimina la descripcion opcional; la propiedad ausente no cambia."
+        }
+      }
+    },
+    "CrearAlmacenDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nombre"
+      ],
+      "properties": {
+        "codigo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "AlmacenDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nombre",
+        "estado"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "codigo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        },
+        "estado": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ActualizarAlmacenDto": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "RegistrarMovimientoInventarioDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productoId",
+        "almacenId",
+        "tipo",
+        "cantidad",
+        "unidad",
+        "fechaHoraEfectiva"
+      ],
+      "properties": {
+        "productoId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "almacenId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "tipo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Código conceptual pendiente de catálogo aprobado."
+        },
+        "cantidad": {
+          "$ref": "#/$defs/CantidadPositiva"
+        },
+        "unidad": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fechaHoraEfectiva": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "referenciaOrigen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observacion": {
+          "type": "string"
+        }
+      }
+    },
+    "MovimientoInventarioDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "productoId",
+        "almacenId",
+        "tipo",
+        "cantidad",
+        "unidad",
+        "fechaHoraEfectiva",
+        "fechaHoraRegistro"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "productoId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "almacenId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "tipo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cantidad": {
+          "$ref": "#/$defs/CantidadPositiva"
+        },
+        "unidad": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fechaHoraEfectiva": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "fechaHoraRegistro": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "ventaId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "detalleVentaId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "referenciaOrigen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observacion": {
+          "type": "string"
+        }
+      }
+    },
+    "CrearClienteDto": {
+      "$ref": "#/$defs/CrearTerceroDto"
+    },
+    "CrearProveedorDto": {
+      "$ref": "#/$defs/CrearTerceroDto"
+    },
+    "CrearTerceroDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nombreORazonSocial"
+      ],
+      "properties": {
+        "nombreORazonSocial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identificadorComercial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "datosContacto": {
+          "$ref": "#/$defs/DatosContacto"
+        }
+      }
+    },
+    "ActualizarDatosContactoDto": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "telefono": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "correoElectronico": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "email"
+        },
+        "direccion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "TerceroDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "nombreORazonSocial",
+        "estado"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "nombreORazonSocial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identificadorComercial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "datosContacto": {
+          "$ref": "#/$defs/DatosContacto"
+        },
+        "estado": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ActualizarTerceroDto": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "nombreORazonSocial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "datosContacto": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActualizarDatosContactoDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null elimina los datos de contacto; la propiedad ausente no cambia."
+        }
+      }
+    },
+    "CrearVentaLineaDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productoId",
+        "cantidad"
+      ],
+      "properties": {
+        "productoId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "cantidad": {
+          "$ref": "#/$defs/CantidadPositiva"
+        }
+      }
+    },
+    "CrearVentaDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineas"
+      ],
+      "properties": {
+        "clienteId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "referenciaOrigen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lineas": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CrearVentaLineaDto"
+          }
+        }
+      }
+    },
+    "ConfirmarVentaDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asignacionesInventario"
+      ],
+      "properties": {
+        "asignacionesInventario": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "detalleVentaId",
+              "almacenId",
+              "cantidad"
+            ],
+            "properties": {
+              "detalleVentaId": {
+                "$ref": "#/$defs/Identificador"
+              },
+              "almacenId": {
+                "$ref": "#/$defs/Identificador"
+              },
+              "cantidad": {
+                "$ref": "#/$defs/CantidadPositiva"
+              }
+            }
+          }
+        }
+      },
+      "description": "Distribución propuesta para confirmar el efecto de inventario. El servidor debe validar cobertura de cada línea y no duplicar asignaciones."
+    },
+    "VentaDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "estado",
+        "lineas"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "clienteId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "fechaHora": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "estado": {
+          "type": "string",
+          "minLength": 1
+        },
+        "moneda": {
+          "type": "string",
+          "minLength": 1
+        },
+        "total": {
+          "$ref": "#/$defs/ImporteNoNegativo"
+        },
+        "lineas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "productoId",
+              "cantidad"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/Identificador"
+              },
+              "productoId": {
+                "$ref": "#/$defs/Identificador"
+              },
+              "cantidad": {
+                "$ref": "#/$defs/CantidadPositiva"
+              },
+              "importeLinea": {
+                "$ref": "#/$defs/ImporteNoNegativo"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SolicitarEmisionComprobanteDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ventaId",
+        "tipoDocumento"
+      ],
+      "properties": {
+        "ventaId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "tipoDocumento": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Código del tipo documental pendiente de definición."
+        }
+      }
+    },
+    "ComprobanteDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "tipoDocumento",
+        "estadoEmision",
+        "fechaEmision"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "ventaId": {
+          "$ref": "#/$defs/Identificador"
+        },
+        "tipoDocumento": {
+          "type": "string",
+          "minLength": 1
+        },
+        "estadoEmision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Estado local; no implica aceptación por SUNAT."
+        },
+        "fechaEmision": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "referenciaExterna": {
+          "type": "string",
+          "minLength": 1
+        },
+        "huellaDocumento": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ResultadoIntegracionDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estadoIntegracion"
+      ],
+      "properties": {
+        "estadoIntegracion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Código conceptual; catálogo oficial y estados aún no definidos."
+        },
+        "fechaHoraRespuesta": {
+          "$ref": "#/$defs/FechaHora"
+        },
+        "referenciaExterna": {
+          "type": "string",
+          "minLength": 1
+        },
+        "codigoRespuesta": {
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

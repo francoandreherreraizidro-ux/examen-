@@ -1,4 +1,14 @@
-# Matriz de Trazabilidad Regulatoria: Requisitos, UBL 2.1 y Reglas SUNAT
+# ARCHIVO HISTÓRICO — MATRIZ REGULATORIA SUPERSEDIDA
+
+> **No usar como fuente normativa, especificación aprobada ni criterio de implementación.** Este documento conserva contenido de un borrador anterior y contiene afirmaciones, tasas, plazos, códigos, validaciones y decisiones de arquitectura que no han sido reconciliados ni verificados como aplicables al alcance actual. Su antigua etiqueta `APPROVED SPECIFICATION` queda expresamente revocada; este archivo no está aprobado.
+>
+> La fuente vigente para la investigación normativa es la [Matriz de Trazabilidad Normativa UBL/SUNAT](../06_Matriz_Trazabilidad_Normativa/matriz_trazabilidad_normativa.csv), junto con el [marco normativo y sus límites](../06_Matriz_Trazabilidad_Normativa/marco_normativo_ubl_sunat.md), el [registro de fuentes oficiales](../06_Matriz_Trazabilidad_Normativa/registro_fuentes_oficiales.md) y el [informe de brechas](../06_Matriz_Trazabilidad_Normativa/informe_brechas_normativas.md). Estos documentos permanecen en `DRAFT` y no certifican cumplimiento.
+>
+> El alcance y los códigos de requisitos se rigen por el [análisis de requisitos vigente](../01_Analisis_Requisitos/analisis_requisitos.md). No se deben trasladar de este archivo histórico reglas tributarias o técnicas sin verificar la fuente oficial, su versión, vigencia y aplicabilidad al tipo de comprobante y SEE que finalmente se aprueben.
+
+---
+
+# Matriz de Trazabilidad Regulatoria: Requisitos, UBL 2.1 y Reglas SUNAT (versión histórica)
 
 | Metadato | Detalle |
 | :--- | :--- |
@@ -8,7 +18,7 @@
 | **Marco Tributario** | SUNAT (Perú) - Sistema de Emisión Electrónica (SEE) |
 | **Estándar Internacional** | OASIS Universal Business Language (UBL) versión 2.1 |
 | **Normativa Legal Clave** | RS 097-2012/SUNAT, RS 117-2017/SUNAT, RS 193-2020/SUNAT, RS 000003-2023/SUNAT |
-| **Estado** | `APPROVED SPECIFICATION` (Referencia Regulatoria Oficial del Sistema) |
+| **Estado** | `HISTÓRICO / SUPERSEDIDO` — no es especificación aprobada ni referencia normativa vigente |
 | **Versión** | 1.0.0 |
 
 ---
