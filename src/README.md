@@ -12,15 +12,15 @@ Every class, module, or service should trace directly to a requirement ID (e.g.,
 
 ---
 
-## 🏛️ Suggested Directory Organization
+## Java implementation
 
-You can adapt this layout based on your chosen language / framework:
+The approved UBL Invoice generator is implemented as a Java 21-compatible module. Its domain remains independent of the XML adapter:
 
 ```text
-src/
-├── types/          # Type definitions, DTOs, and interface contracts (matching specs/api/)
-├── domain/         # Pure domain entities, business rules, and invariant validations
-├── services/       # Application orchestration, use cases, and workflows
-├── adapters/       # Primary/Secondary adapters (HTTP controllers, CLI, database, external APIs)
-└── index.ts        # Application entrypoint
+src/main/java/com/comercial/
+├── domain/billing/ # Invoice and immutable value records
+├── adapters/ubl/   # StAX UBL Invoice serializer
+└── examples/       # Synthetic XML example entry point
 ```
+
+See [SPEC-003](../specs/features/003-generador-invoice-ubl21.md) and [the implementation guide](../docs/implementacion_generador_invoice_ubl21.md).

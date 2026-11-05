@@ -15,16 +15,14 @@ tests/
 
 ---
 
-## 🧪 Traceability Requirement
+## 🧪 Traceability and execution
 
-Each test suite should annotate or reference the Spec ID and Requirement ID it verifies:
+The Invoice generator tests are derived from SPEC-003 acceptance criteria. Unit tests parse generated XML and inspect namespaces, elements, attributes and values. The integration test additionally validates against the local official UBL 2.1 Invoice schema tree.
 
-```typescript
-describe('SPEC-001: User Profile Management', () => {
-  describe('FR-02: Display Name Validation', () => {
-    it('rejects display names shorter than 2 characters', () => {
-      // test logic
-    });
-  });
-});
+Run all unit and structural tests from the repository root with Maven:
+
+```powershell
+mvn test
 ```
+
+See [the implementation guide](../docs/implementacion_generador_invoice_ubl21.md) for the Java/Maven toolchain and exact coverage.
