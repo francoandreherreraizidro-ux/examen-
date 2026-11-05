@@ -33,7 +33,7 @@ Los nombres de propiedades usan `lowerCamelCase` en español, alineados con el m
 | Campos desconocidos | `additionalProperties: false` en DTOs definidos | Rechazo estructural para evitar propiedades no contratadas; revisar compatibilidad/versionado antes de aprobar. |
 | Estado de negocio | No se acepta desde comandos de creación salvo que se acuerde explícitamente | Evita que el cliente imponga el estado interno. |
 | Actualización parcial | `PATCH` con `application/merge-patch+json`; propiedad ausente no cambia, `null` elimina solo campos opcionales donde se indica | Propuesta para atributos descriptivos; no habilita alterar historia ni datos de identidad. |
-| Idempotencia | Encabezado HTTP `Idempotency-Key` en operaciones mutables del borrador | Propuesta; alcance, retención y persistencia atómica pendientes. No forma parte de los DTOs JSON. |
+| Idempotencia | Encabezado HTTP opcional `Idempotency-Key` propuesto en ocho comandos `POST`; excluido de los cuatro `PATCH` descriptivos | Propuesta pendiente de aprobación; obligatoriedad, operaciones, ámbito, retención, replay y concurrencia por decidir. No forma parte de los DTOs JSON; reintentos HTTP y SUNAT son distintos. |
 | Mensaje de error | Perfil Problem Details propuesto en el contrato OpenAPI | Semántica HTTP y catálogo final pendientes de aprobación. |
 
 ## 3. DTOs propuestos
@@ -64,7 +64,9 @@ Todos los nombres son identificadores de contrato y no implican endpoints ni cas
 - **Opcionales:** `referenciaOrigen`, `observacion`.
 - **No incluido:** balance, costo, usuario, aprobación, stock resultante o lote. No se debe aceptar un saldo calculado suministrado por el cliente.
 - **Validación semántica pendiente:** existencia de producto y almacén, unidad compatible, reglas de signos, política de existencias y relación con venta/recepción.
-- **Control pendiente:** definir tipos y orígenes para impedir que una salida de venta se registre aquí y también mediante la confirmación de venta.
+- **Origen propuesto:** este comando solo registra entradas y ajustes no originados por ventas. La confirmación de venta sería la única que crea sus salidas y los movimientos resultantes deben identificar `ventaId` y, cuando sea posible, `detalleVentaId`. La operación genérica no acepta salidas de venta.
+- **Anulaciones/reversiones:** propuesta de registrar un movimiento compensatorio ligado al movimiento original; no editar ni borrar el historial. No hay DTO/endpoint de reversión definido y la política debe aprobarse.
+- **Control pendiente:** acordar catálogo de tipos/orígenes y cómo se expresan entradas, ajustes y reversiones. No se presupone política de stock negativo, valoración ni requisito de recepción para una entrada.
 
 ### 3.4 `CrearClienteDto` y `CrearProveedorDto`
 
@@ -89,7 +91,7 @@ Todos los nombres son identificadores de contrato y no implican endpoints ni cas
 
 - **Uso:** solicitud conceptual para emitir un documento asociado a una venta. `RF-CPE-001`, `RF-SUN-001`; la asociación es inferida por `RF-VEN-002`.
 - **Obligatorios propuestos:** `ventaId`, `tipoDocumento`.
-- **Idempotencia:** se aplica mediante el encabezado HTTP común `Idempotency-Key`; no se repite en el cuerpo del DTO.
+- **Idempotencia:** se propone mediante el encabezado HTTP opcional `Idempotency-Key`, no repetido en el DTO. La operación, obligatoriedad, ámbito, huella, retención, concurrencia y replay siguen pendientes; la emisión remota requiere reconciliación separada.
 - **No incluido:** campos UBL, datos tributarios, XML firmado, certificados, CDR, serie/correlativo o estado de aceptación; esos contratos requieren definición normativa y de integración.
 - **Pendiente:** decidir alcance de la clave, retención y respuesta ante reintento con contenido idéntico o distinto.
 

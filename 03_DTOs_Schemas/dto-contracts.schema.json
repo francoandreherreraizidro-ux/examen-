@@ -191,7 +191,7 @@
         "tipo": {
           "type": "string",
           "minLength": 1,
-          "description": "Código conceptual pendiente de catálogo aprobado."
+          "description": "Código conceptual pendiente de catálogo aprobado. La propuesta limita el registro genérico a entradas y ajustes no originados por ventas."
         },
         "cantidad": {
           "$ref": "#/$defs/CantidadPositiva"
@@ -237,7 +237,8 @@
         },
         "tipo": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Tipo conceptual pendiente de catálogo; las salidas originadas por ventas se crearían exclusivamente al confirmar la venta."
         },
         "cantidad": {
           "$ref": "#/$defs/CantidadPositiva"
@@ -253,10 +254,12 @@
           "$ref": "#/$defs/FechaHora"
         },
         "ventaId": {
-          "$ref": "#/$defs/Identificador"
+          "$ref": "#/$defs/Identificador",
+          "description": "Venta de origen si el movimiento fue generado por la confirmación propuesta."
         },
         "detalleVentaId": {
-          "$ref": "#/$defs/Identificador"
+          "$ref": "#/$defs/Identificador",
+          "description": "Línea de venta de origen cuando corresponda y esté disponible."
         },
         "referenciaOrigen": {
           "type": "string",

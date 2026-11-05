@@ -63,7 +63,8 @@ La revisión secundaria usa códigos que no existen en ese análisis vigente (po
 - **Responsabilidad:** registrar un evento de ingreso, salida u otro movimiento que afecte el historial de existencias.
 - **Identificador primario:** `id: Identificador`.
 - **Atributos conceptuales:** `tipo: TipoMovimiento`, `cantidad: Cantidad`, `unidad: Código`, `fechaHoraEfectiva: FechaHora`, `fechaHoraRegistro: FechaHora`, `referenciaOrigen: Referencia opcional`, `observacion: Texto opcional`.
-- **Relaciones:** se asocia a exactamente un `Producto` y un `Almacen` en el modelo propuesto; puede asociarse a cero o un `Lote`, `Venta` y `Usuario` según el origen, las reglas de lote y la atribución que se confirmen. Un movimiento no exige una entidad `Recepcion`.
+- **Relaciones:** se asocia a exactamente un `Producto` y un `Almacen` en el modelo propuesto; puede asociarse a cero o un `Lote`, `Venta` y `Usuario` según el origen, las reglas de lote y la atribución que se confirmen. Si lo genera una venta, se propone relacionarlo también con la línea correspondiente cuando sea posible. Un movimiento no exige una entidad `Recepcion`.
+- **Origen único de venta (propuesta):** la confirmación de venta sería la única responsable de generar salidas asociadas a esa venta; el registro genérico quedaría para entradas y ajustes no originados por ventas. Una anulación/reversión se representaría como evento compensatorio enlazado al movimiento original, no como edición/borrado. Estas reglas y el catálogo de tipos/orígenes requieren aprobación.
 - **Invariantes:** la cantidad debe ser válida y la operación debe identificar su sentido (entrada/salida) mediante `tipo`, no por valores ambiguos. La convención de signo/unidad, valoración, correcciones compensatorias y prevención de saldo negativo son decisiones pendientes. Conservar el registro histórico es expreso; prohibir modificaciones físicas y corregir solo por compensación es una propuesta por aprobar.
 - **Requisitos:** `RF-INV-002`, `RF-TRZ-001`, `RF-MIG-001`; `RF-VAL-001` para validar datos asociados.
 
@@ -90,7 +91,7 @@ La revisión secundaria usa códigos que no existen en ese análisis vigente (po
 - **Responsabilidad:** representar la transacción comercial y relacionarla con sus líneas, cliente si se identifica, movimientos asociados y comprobantes que se emitan.
 - **Identificador primario:** `id: Identificador`.
 - **Atributos conceptuales:** `fechaHora: FechaHora`, `estado: EstadoVenta`, `moneda: CódigoMoneda opcional`, `total: Importe opcional`, `referenciaOrigen: Referencia opcional`.
-- **Relaciones:** cero o un `Cliente`; una o más `DetalleVenta` para una venta confirmada (un borrador podría no tener líneas); cero o más `MovimientoInventario`; cero o más `ComprobanteElectronico` asociados. No se fija almacén único para toda la venta.
+- **Relaciones:** cero o un `Cliente`; una o más `DetalleVenta` para una venta confirmada (un borrador podría no tener líneas); cero o más `MovimientoInventario`; cero o más `ComprobanteElectronico` asociados. Se propone que los movimientos de salida por esta venta sean generados únicamente por su confirmación y queden vinculados a la venta y, cuando sea posible, a `DetalleVenta`. No se fija almacén único para toda la venta.
 - **Invariantes:** una venta confirmada debe tener líneas y sus importes deben ser consistentes según las reglas comerciales que se aprueben. No se obliga a crear un comprobante en el mismo instante, ni se define que la venta solo sea válida cuando SUNAT lo acepte.
 - **Requisitos:** `RF-VEN-001`, `RF-VEN-002`, `RF-TRZ-001`, `RF-VAL-001`.
 
@@ -183,10 +184,10 @@ Las multiplicidades describen la propuesta conceptual persistente, no reglas ya 
 2. **Precios e importes:** si aplican, evitar importes negativos salvo que una operación explícita los admita; fijar moneda, precisión, descuentos y redondeo antes de validar totales.
 3. **Claves únicas:** acordar unicidad para códigos de producto y documentos externos. No hay suficientes datos para afirmar que SKU, RUC, serie/correlativo u otros campos sean obligatorios.
 4. **Historial de inventario:** preservar asientos ya registrados; como alternativa de corrección, generar un evento compensatorio en lugar de alterar el historial. Esta inmutabilidad es propuesta: el análisis solo exige registro histórico.
-5. **Venta e inventario:** cada salida originada por venta deberá poder rastrearse a esa venta y, de ser posible, a su línea. La confirmación del momento de descuento, reservas y atomicidad transaccional está pendiente.
+5. **Venta e inventario:** se propone que solo la confirmación genere las salidas originadas por ventas y que cada movimiento pueda rastrearse a la venta y, de ser posible, a su línea. El endpoint genérico no crearía esas salidas; entradas y ajustes se distinguen por tipo/origen. Las anulaciones/reversiones se proponen como eventos compensatorios ligados al original. El momento de descuento, reservas, atomicidad, reglas de anulación y catálogo de tipos están pendientes; no se establece una política de stock negativo.
 6. **Saldo disponible:** no se establece una regla de stock no negativo. Debe decidirse si se rechazan salidas sin existencias, se permiten reservas u otra política.
 7. **Venta y comprobante:** no exigir comprobante aceptado como condición para guardar una venta. Mantener por separado estado de venta, estado de emisión, transmisión y resultado recibido.
-8. **Reintentos:** una misma solicitud de emisión debe tener un mecanismo idempotente para evitar duplicar el documento lógico. La clave y la retención de resultados se definirán en el contrato de emisión; el transporte/reintento no es una entidad comercial por defecto.
+8. **Reintentos:** se propone una clave HTTP opcional para los comandos `POST` con efectos duplicables, y una identidad documental/reconciliación aparte para reintentos externos. Obligatoriedad, alcance, retención y semántica siguen pendientes; la clave no es una entidad comercial por defecto.
 9. **Recepciones:** si se aprueban, no confirmar una recepción vacía y evitar que el mismo evento se contabilice más de una vez; el identificador de documento origen y política de duplicidad están por definir.
 10. **Lotes:** si se aprueba su control, validar que el lote corresponda al producto del movimiento; las reglas de vencimiento y saldo por almacén quedan pendientes.
 

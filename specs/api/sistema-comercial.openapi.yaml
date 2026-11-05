@@ -89,7 +89,6 @@ paths:
       x-status: proposed
       parameters:
         - $ref: '#/components/parameters/ProductoId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -186,7 +185,6 @@ paths:
       x-status: proposed
       parameters:
         - $ref: '#/components/parameters/AlmacenId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -254,14 +252,17 @@ paths:
       operationId: registrarMovimientoInventario
       summary: Registrar movimiento de inventario
       description: |
-        Solicita el registro de un evento de inventario. La validación de
-        existencia de referencias y las reglas de saldo se resuelven fuera
-        del JSON Schema y siguen pendientes de definición.
+        Solicita el registro de un evento de inventario no originado por una
+        venta: la propuesta limita esta operación a entradas y ajustes. Las
+        salidas de venta se generarían exclusivamente al confirmar la venta.
+        El catálogo de tipos, anulaciones/reversiones y reglas de saldo sigue
+        pendiente de aprobación.
       x-requirements: [RF-INV-002, RF-VAL-001]
       x-status: proposed
       x-pending-decisions:
-        - Definir catálogo cerrado de tipos de movimiento y sus orígenes.
-        - Impedir duplicar salidas de venta; estas se generarían solo al confirmar la venta.
+        - Aprobar que la confirmación de venta sea la única fuente de sus salidas.
+        - Definir tipos/orígenes para entradas, ajustes y anulaciones/reversiones.
+        - Definir cómo se liga una reversión a su movimiento original.
         - Definir signo, stock insuficiente y política de correcciones históricas.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -384,7 +385,6 @@ paths:
       x-status: proposed
       parameters:
         - $ref: '#/components/parameters/ClienteId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -483,7 +483,6 @@ paths:
       x-status: proposed
       parameters:
         - $ref: '#/components/parameters/ProveedorId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -693,11 +692,15 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      required: true
+      required: false
       description: |
-        Misma clave y mismo contenido deben devolver el resultado previo;
-        reutilizar la clave con contenido distinto produce conflicto.
-        Alcance y retención quedan pendientes de aprobación.
+        Encabezado opcional de una propuesta de idempotencia para comandos
+        POST. Si se aprueba su garantía, la misma clave y el mismo contenido
+        en el mismo ámbito no deben repetir el efecto; reutilizarla con
+        contenido distinto debe producir conflicto. El ámbito, la
+        obligatoriedad, el estado de solicitudes en curso y la retención
+        están pendientes de aprobación. No se aplica a los PATCH descriptivos
+        del borrador ni sustituye la reconciliación de reintentos SUNAT.
       schema:
         type: string
         minLength: 1

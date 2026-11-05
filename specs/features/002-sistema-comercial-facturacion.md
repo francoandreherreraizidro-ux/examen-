@@ -83,6 +83,11 @@ No hay reglas transaccionales específicas de venta, stock, tributación o segur
 - fuentes legadas, entidades/periodos migrados, transformación, deduplicación y aceptación;
 - autenticación, perfiles, autorizaciones, retención y auditoría por usuario.
 
+### Propuestas de coherencia pendientes de aprobación
+
+- **Idempotencia:** no existe un requisito expreso. Se propone ofrecer `Idempotency-Key` opcional en los comandos `POST` que crean recursos o efectos, no en los `PATCH` descriptivos. Operaciones cubiertas, obligatoriedad, alcance, retención, replay y concurrencia requieren aprobación. La repetición de una llamada API es distinta de un reintento de transmisión a SUNAT.
+- **Origen de movimientos de venta:** se propone que solo la confirmación de venta genere sus movimientos de salida; el endpoint genérico quedaría para entradas y ajustes no originados por ventas. Anulaciones/reversiones se representarían mediante eventos compensatorios ligados al movimiento original, mediante una operación aún no especificada. El catálogo, momento de confirmación, atomicidad, reglas de stock y reversión permanecen pendientes.
+
 Las reglas de una fuente normativa sólo se incorporan después de validar la fuente oficial vigente, su ámbito documental y su aplicabilidad al SEE elegido. Las restricciones del XSD OASIS se distinguen de las obligaciones SUNAT y de las decisiones internas.
 
 ## 7. Escenarios de aceptación preliminares
