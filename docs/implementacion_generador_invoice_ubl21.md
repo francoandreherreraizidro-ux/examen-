@@ -8,8 +8,8 @@ El generador no persiste datos, no expone HTTP ni envía, firma o autentica docu
 
 ## Lenguaje y herramientas
 
-- Java 21 es el nivel de API/bytecode definido en Maven (`maven.compiler.release=21`).
-- Validación final ejecutada con Eclipse Temurin JDK/Javac 21.0.13+9 LTS.
+- Java 25 es el nivel de API/bytecode definido en Maven (`maven.compiler.release=25`), según [SPEC-004](../specs/features/004-java-25-lts-runtime.md).
+- Validación final del generador original ejecutada con Eclipse Temurin JDK/Javac 21.0.13+9 LTS; la validación del baseline Java 25 se registra en SPEC-004.
 - Maven 3.9.9.
 - JUnit Jupiter 5.11.4.
 - StAX `XMLStreamWriter` y JAXP del módulo estándar `java.xml`; sin dependencia XML de terceros y sin Spring Boot.
